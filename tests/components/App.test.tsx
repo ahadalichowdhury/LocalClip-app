@@ -210,9 +210,13 @@ describe('App', () => {
       expect(screen.getByText('Test clipboard content')).toBeInTheDocument();
     });
 
-    // Find and click clear history button by title
-    const clearButton = screen.getByTitle('Clear History');
+    const clearButton = screen.getByRole('button', { name: 'Clear' });
     fireEvent.click(clearButton);
+
+    const confirmClear = await screen.findByRole('button', {
+      name: /Clear all unpinned/i,
+    });
+    fireEvent.click(confirmClear);
 
     expect(window.electronAPI.clipboard.clear).toHaveBeenCalled();
   });

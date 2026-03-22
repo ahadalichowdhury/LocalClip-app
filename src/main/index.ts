@@ -356,6 +356,10 @@ class LocalClipApp {
         frame: true, // Keep frame for better Linux integration
         transparent: false, // Avoid transparency issues on some Linux DEs
       }),
+      // macOS: allow showing above native fullscreen apps (separate Space)
+      ...(process.platform === 'darwin' && {
+        fullscreenable: false,
+      }),
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         sandbox: false,
@@ -365,6 +369,13 @@ class LocalClipApp {
         webSecurity: true,
       },
     });
+
+    // macOS: appear on the active Space, including when another app is fullscreen
+    if (process.platform === 'darwin' && this.mainWindow) {
+      this.mainWindow.setVisibleOnAllWorkspaces(true, {
+        visibleOnFullScreen: true,
+      });
+    }
 
     this.mainWindow.on('ready-to-show', () => {
       // If this window was created in response to a hotkey press, show it immediately
@@ -569,10 +580,6 @@ class LocalClipApp {
         {
           label: 'Show LocalClip',
           click: () => this.showWindowWithProperFocus(),
-        },
-        {
-          label: 'Settings',
-          click: () => this.showSettings(),
         },
         { type: 'separator' },
         {
@@ -996,8 +1003,8 @@ class LocalClipApp {
     if (!this.mainWindow) return;
 
     try {
-      // Set window level to floating to appear above fullscreen apps
-      this.mainWindow.setAlwaysOnTop(true, 'floating');
+      // 'screen-saver' sits above native fullscreen; pair with setVisibleOnAllWorkspaces
+      this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
 
       // Force window to current Space/Desktop
       const { app } = require('electron');
@@ -1007,13 +1014,7 @@ class LocalClipApp {
         if (this.mainWindow && !this.mainWindow.isDestroyed()) {
           this.mainWindow.focus();
           this.mainWindow.moveTop();
-
-          // Reset always on top after showing
-          setTimeout(() => {
-            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-              this.mainWindow.setAlwaysOnTop(false);
-            }
-          }, 100);
+          // Keep always-on-top while visible so we don't drop behind fullscreen; cleared in hideWindow
         }
       }, 50);
     } catch (error) {
@@ -1192,6 +1193,8 @@ class LocalClipApp {
         this.mainWindow.focus();
         this.mainWindow.setAlwaysOnTop(false);
         this.mainWindow.moveTop();
+      } else if (process.platform === 'darwin') {
+        this.handleMacOSWindowFocus();
       }
     }, 50); // Close the setTimeout callback
   }
@@ -1205,6 +1208,9 @@ class LocalClipApp {
         if (opacity <= 0) {
           clearInterval(fadeOut);
           if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+            if (process.platform === 'darwin') {
+              this.mainWindow.setAlwaysOnTop(false);
+            }
             this.mainWindow.hide();
             this.mainWindow.setOpacity(1); // Reset opacity for next show
           }
@@ -1504,8 +1510,11 @@ class LocalClipApp {
         console.log('📝 Text copied to clipboard for pasting');
       }
 
-      // Hide our window first
+      // Hide our window first (clear macOS lift level; paste path skips hideWindow fade)
       if (this.mainWindow) {
+        if (process.platform === 'darwin') {
+          this.mainWindow.setAlwaysOnTop(false);
+        }
         this.mainWindow.hide();
       }
 

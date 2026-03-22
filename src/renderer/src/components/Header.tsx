@@ -1,5 +1,6 @@
 import { Clipboard } from 'lucide-react';
 import React from 'react';
+import { ActionTooltip } from './ActionTooltip';
 
 interface HeaderProps {
   onClearHistory: () => void;
@@ -28,21 +29,26 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
-          <button
-            onClick={onClearHistory}
-            className="px-3 py-1.5 text-sm bg-light-bg-tertiary dark:bg-dark-bg-tertiary hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
-            title="Clear History"
-          >
-            Clear
-          </button>
+          <ActionTooltip label="Clear History">
+            <button
+              type="button"
+              onClick={onClearHistory}
+              className="px-3 py-1.5 text-sm bg-light-bg-tertiary dark:bg-dark-bg-tertiary hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+            >
+              Clear
+            </button>
+          </ActionTooltip>
 
-          <button
-            onClick={onOpenSettings}
-            className="px-3 py-1.5 text-sm bg-light-bg-tertiary dark:bg-dark-bg-tertiary hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
-            title="Settings"
-          >
-            ⚙️
-          </button>
+          <ActionTooltip label="Settings">
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="px-3 py-1.5 text-sm bg-light-bg-tertiary dark:bg-dark-bg-tertiary hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+              aria-label="Settings"
+            >
+              ⚙️
+            </button>
+          </ActionTooltip>
         </div>
       </div>
     </header>

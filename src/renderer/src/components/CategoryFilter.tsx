@@ -1,4 +1,8 @@
 import React from 'react';
+import {
+  categoryDisplayLabel,
+  entryMatchesCategoryChip,
+} from '../../../shared/category-display';
 import { ClipboardEntry } from '../../../shared/types';
 
 interface CategoryFilterProps {
@@ -17,7 +21,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
     const categorySet = new Set<string>();
     entries.forEach(entry => {
       if (entry.category) {
-        categorySet.add(entry.category);
+        categorySet.add(categoryDisplayLabel(entry.category));
       }
     });
     return Array.from(categorySet).sort();
@@ -39,8 +43,10 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
         return '💻';
       case 'email addresses':
         return '📧';
+      case 'numbers':
+        return '🔢';
       case 'phone numbers':
-        return '📞';
+        return '🔢';
       default:
         return '📄';
     }
@@ -50,7 +56,9 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
     if (category === 'all') {
       return entries.length;
     }
-    return entries.filter(entry => entry.category === category).length;
+    return entries.filter(entry =>
+      entryMatchesCategoryChip(entry.category, category)
+    ).length;
   };
 
   return (

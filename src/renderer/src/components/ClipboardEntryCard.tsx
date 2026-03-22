@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { categoryDisplayLabel } from '../../../shared/category-display';
 import { ClipboardEntry } from '../../../shared/types';
+import { ActionTooltip } from './ActionTooltip';
 
 interface ClipboardEntryCardProps {
   entry: ClipboardEntry;
@@ -59,8 +61,10 @@ export const ClipboardEntryCard: React.FC<ClipboardEntryCardProps> = ({
         return '💻';
       case 'email addresses':
         return '📧';
+      case 'numbers':
+        return '🔢';
       case 'phone numbers':
-        return '📞';
+        return '🔢';
       default:
         return '📄';
     }
@@ -423,60 +427,73 @@ export const ClipboardEntryCard: React.FC<ClipboardEntryCardProps> = ({
         <div className="flex items-center space-x-2">
           <span className="text-sm">{getCategoryIcon(entry.category)}</span>
           <span className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
-            {entry.category || 'Uncategorized'}
+            {categoryDisplayLabel(entry.category)}
           </span>
-          {entry.isPinned && <span className="text-xs">��</span>}
+          {entry.isPinned && <span className="text-xs">📌</span>}
         </div>
 
         <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={handleOpenNoteModal}
-            className="p-1 hover:bg-light-bg-primary dark:hover:bg-dark-bg-primary rounded text-xs"
-            title={entry.note ? 'Edit note' : 'Add note'}
-          >
-            {entry.note ? '📝' : '📄'}
-          </button>
+          <ActionTooltip label={entry.note ? 'Edit note' : 'Add note'}>
+            <button
+              type="button"
+              onClick={handleOpenNoteModal}
+              className="p-1 hover:bg-light-bg-primary dark:hover:bg-dark-bg-primary rounded text-xs"
+              aria-label={entry.note ? 'Edit note' : 'Add note'}
+            >
+              {entry.note ? '📝' : '📄'}
+            </button>
+          </ActionTooltip>
 
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              onPin(entry.id);
-            }}
-            className="p-1 hover:bg-light-bg-primary dark:hover:bg-dark-bg-primary rounded text-xs"
-            title={entry.isPinned ? 'Unpin' : 'Pin'}
-          >
-            {entry.isPinned ? '📌' : '📍'}
-          </button>
+          <ActionTooltip label={entry.isPinned ? 'Unpin' : 'Pin'}>
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                onPin(entry.id);
+              }}
+              className="p-1 hover:bg-light-bg-primary dark:hover:bg-dark-bg-primary rounded text-xs"
+              aria-label={entry.isPinned ? 'Unpin' : 'Pin'}
+            >
+              {entry.isPinned ? '📌' : '📍'}
+            </button>
+          </ActionTooltip>
 
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              onCopy(entry);
-            }}
-            className="p-1 hover:bg-light-bg-primary dark:hover:bg-dark-bg-primary rounded text-xs"
-            title="Copy to clipboard"
-          >
-            📋
-          </button>
+          <ActionTooltip label="Copy to clipboard">
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                onCopy(entry);
+              }}
+              className="p-1 hover:bg-light-bg-primary dark:hover:bg-dark-bg-primary rounded text-xs"
+              aria-label="Copy to clipboard"
+            >
+              📋
+            </button>
+          </ActionTooltip>
 
           {/* Three-dot menu for download options */}
           <div className="relative" ref={menuRef}>
-            <button
-              onClick={e => {
-                e.stopPropagation();
-                setIsMenuOpen(!isMenuOpen);
-              }}
-              className="p-1 hover:bg-light-bg-primary dark:hover:bg-dark-bg-primary rounded text-xs"
-              title="Download options"
-            >
-              ⋯
-            </button>
+            <ActionTooltip label="Download options">
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  setIsMenuOpen(!isMenuOpen);
+                }}
+                className="p-1 hover:bg-light-bg-primary dark:hover:bg-dark-bg-primary rounded text-xs"
+                aria-label="Download options"
+              >
+                ⋯
+              </button>
+            </ActionTooltip>
 
             {isMenuOpen && (
               <div className="absolute right-0 top-8 bg-light-bg-primary dark:bg-dark-bg-primary border border-light-border dark:border-dark-border rounded-lg shadow-lg z-50 min-w-48">
                 {getDownloadOptions().map((option, index) => (
                   <button
                     key={index}
+                    type="button"
                     onClick={e => {
                       e.stopPropagation();
                       option.action();
@@ -491,26 +508,31 @@ export const ClipboardEntryCard: React.FC<ClipboardEntryCardProps> = ({
             )}
           </div>
 
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              onDelete(entry.id);
-            }}
-            className="p-1 hover:bg-red-100 dark:hover:bg-red-900 rounded text-xs text-red-600 dark:text-red-400"
-            title="Delete"
-          >
-            🗑️
-          </button>
+          <ActionTooltip label="Delete">
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                onDelete(entry.id);
+              }}
+              className="p-1 hover:bg-red-100 dark:hover:bg-red-900 rounded text-xs text-red-600 dark:text-red-400"
+              aria-label="Delete"
+            >
+              🗑️
+            </button>
+          </ActionTooltip>
         </div>
       </div>
 
       {/* Content */}
-      <div
-        className="text-sm text-light-text-primary dark:text-dark-text-primary line-clamp-2"
-        title="Click to paste"
+      <ActionTooltip
+        label="Click to paste"
+        wrapperClassName="block w-full min-w-0"
       >
-        {getContentPreview()}
-      </div>
+        <div className="text-sm text-light-text-primary dark:text-dark-text-primary line-clamp-2">
+          {getContentPreview()}
+        </div>
+      </ActionTooltip>
 
       {/* Note Display */}
       {entry.note && (

@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import '../../shared/electronAPI';
+import {
+  categoryDisplayLabel,
+  entryMatchesCategoryChip,
+} from '../../shared/category-display';
 import { ClipboardEntry } from '../../shared/types';
 import { About } from './components/About';
 import { CategoryFilter } from './components/CategoryFilter';
@@ -21,6 +25,7 @@ function App() {
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [autoCategories, setAutoCategories] = useState(true);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // Initialize theme and font size management
   useTheme();
@@ -82,6 +87,14 @@ function App() {
       // Only handle keyboard navigation when not in about window and not in settings
       if (isAboutOpen || isSettingsOpen) return;
 
+      if (showClearConfirm) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          setShowClearConfirm(false);
+        }
+        return;
+      }
+
       switch (event.key) {
         case 'ArrowDown':
           event.preventDefault();
@@ -115,7 +128,13 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [filteredEntries, selectedIndex, isAboutOpen, isSettingsOpen]);
+  }, [
+    filteredEntries,
+    selectedIndex,
+    isAboutOpen,
+    isSettingsOpen,
+    showClearConfirm,
+  ]);
 
   // Load settings
   const loadSettings = async () => {
@@ -159,9 +178,8 @@ function App() {
 
     // Filter by category only if auto-categorization is enabled
     if (autoCategories && selectedCategory !== 'all') {
-      filtered = filtered.filter(
-        entry =>
-          entry.category?.toLowerCase() === selectedCategory.toLowerCase()
+      filtered = filtered.filter(entry =>
+        entryMatchesCategoryChip(entry.category, selectedCategory)
       );
     }
 
@@ -172,7 +190,9 @@ function App() {
         entry =>
           entry.content.toLowerCase().includes(query) ||
           entry.preview?.toLowerCase().includes(query) ||
-          entry.category?.toLowerCase().includes(query) ||
+          categoryDisplayLabel(entry.category)
+            .toLowerCase()
+            .includes(query) ||
           entry.note?.toLowerCase().includes(query)
       );
     }
@@ -220,7 +240,7 @@ function App() {
     }
   };
 
-  const handleClearHistory = async () => {
+  const performClearHistory = async () => {
     try {
       const success = await window.electronAPI.clipboard.clear();
       if (success) {
@@ -229,6 +249,13 @@ function App() {
     } catch (err) {
       console.error('Error clearing history:', err);
     }
+  };
+
+  const openClearConfirm = () => setShowClearConfirm(true);
+
+  const confirmClearHistory = async () => {
+    setShowClearConfirm(false);
+    await performClearHistory();
   };
 
   const handleCopyToClipboard = async (entry: ClipboardEntry) => {
@@ -334,7 +361,7 @@ function App() {
   return (
     <div className="h-screen bg-light-bg-primary dark:bg-dark-bg-primary text-light-text-primary dark:text-dark-text-primary flex flex-col overflow-hidden">
       <Header
-        onClearHistory={handleClearHistory}
+        onClearHistory={openClearConfirm}
         onOpenSettings={handleOpenSettings}
       />
 
@@ -379,6 +406,49 @@ function App() {
 
         {/* Settings Modal */}
         <Settings isOpen={isSettingsOpen} onClose={handleCloseSettings} />
+
+        {showClearConfirm && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clear-history-title"
+            onClick={() => setShowClearConfirm(false)}
+          >
+            <div
+              className="bg-light-bg-primary dark:bg-dark-bg-primary rounded-xl shadow-xl border border-light-border dark:border-dark-border max-w-md w-full p-6"
+              onClick={e => e.stopPropagation()}
+            >
+              <h2
+                id="clear-history-title"
+                className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-2"
+              >
+                Clear clipboard history?
+              </h2>
+              <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-6">
+                This removes every <strong>unpinned</strong> item from your
+                history. Pinned items are kept. This does not erase what is
+                currently in the system clipboard.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowClearConfirm(false)}
+                  className="px-4 py-2 text-sm rounded-lg border border-light-border dark:border-dark-border text-light-text-primary dark:text-dark-text-primary hover:bg-light-bg-secondary dark:hover:bg-dark-bg-secondary transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void confirmClearHistory()}
+                  className="px-4 py-2 text-sm rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+                >
+                  Clear all unpinned
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

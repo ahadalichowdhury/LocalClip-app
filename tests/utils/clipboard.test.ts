@@ -1,3 +1,5 @@
+import { isClipboardNumbersCategory } from '../../src/shared/numeric-clipboard';
+
 // Test utility functions for clipboard operations
 describe('Clipboard Utilities', () => {
   describe('formatClipboardContent', () => {
@@ -32,10 +34,11 @@ describe('Clipboard Utilities', () => {
       expect(detectContentType('test.email+tag@domain.co.uk')).toBe('email');
     });
 
-    it('should detect phone numbers', () => {
-      expect(detectContentType('+1-234-567-8900')).toBe('phone');
-      expect(detectContentType('(555) 123-4567')).toBe('phone');
-      expect(detectContentType('555.123.4567')).toBe('phone');
+    it('should detect numbers-only clipboard lines', () => {
+      expect(detectContentType('+1-234-567-8900')).toBe('number');
+      expect(detectContentType('(202) 555-1234')).toBe('number');
+      expect(detectContentType('202-555-1234')).toBe('number');
+      expect(detectContentType('4111 1111 1111 1111')).toBe('number');
     });
 
     it('should detect code snippets', () => {
@@ -71,10 +74,8 @@ describe('Clipboard Utilities', () => {
       );
     });
 
-    it('should categorize phone numbers', () => {
-      expect(categorizeContent('Call me at (555) 123-4567')).toBe(
-        'Phone Numbers'
-      );
+    it('should categorize numbers-only lines', () => {
+      expect(categorizeContent('(202) 555-1234')).toBe('Numbers');
     });
 
     it('should default to Text category', () => {
@@ -156,10 +157,8 @@ function detectContentType(content: string): string {
     return 'email';
   }
 
-  // Phone number detection
-  const phoneRegex = /^[\+]?[1-9]?[\d\s\-\(\)\.]{7,15}$/;
-  if (phoneRegex.test(content.replace(/\s/g, ''))) {
-    return 'phone';
+  if (isClipboardNumbersCategory(content)) {
+    return 'number';
   }
 
   // Code detection (simplified)
@@ -196,10 +195,8 @@ function categorizeContent(content: string): string {
     return 'Emails';
   }
 
-  // Check for phone numbers in text
-  const phoneRegex = /[\+]?[1-9]?[\d\s\-\(\)\.]{7,15}/;
-  if (phoneRegex.test(content)) {
-    return 'Phone Numbers';
+  if (isClipboardNumbersCategory(content.trim())) {
+    return 'Numbers';
   }
 
   // Code detection (simplified)

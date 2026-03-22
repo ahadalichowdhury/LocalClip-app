@@ -1,6 +1,7 @@
 import { app, clipboard } from 'electron';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { isClipboardNumbersCategory } from '../shared/numeric-clipboard';
 import { ClipboardEntry } from '../shared/types';
 import { JsonStorageManager } from './json-storage';
 import { SettingsManager } from './settings';
@@ -257,10 +258,10 @@ export class ClipboardMonitor {
       return 'email';
     }
 
-    // Detect phone number
-    if (this.isPhoneNumber(content)) {
-      console.log('📞 Phone number detected!');
-      return 'phone';
+    // Numbers (phones, cards, OTPs, etc.) — simple digit-based bucket
+    if (this.isNumbersCategory(content)) {
+      console.log('🔢 Numbers category detected!');
+      return 'number';
     }
 
     // Detect code
@@ -422,8 +423,8 @@ export class ClipboardMonitor {
         case 'email':
           category = 'Email Addresses';
           break;
-        case 'phone':
-          category = 'Phone Numbers';
+        case 'number':
+          category = 'Numbers';
           break;
         case 'code':
           category = 'Code';
@@ -513,87 +514,11 @@ export class ClipboardMonitor {
     return isEmail;
   }
 
-  private isPhoneNumber(text: string): boolean {
-    console.log('📞 Checking if phone number:', text.substring(0, 50) + '...');
-
-    // Comprehensive international phone number patterns
-    const phonePatterns = [
-      // North America (US/Canada) - (555) 123-4567, 555-123-4567, 555.123.4567
-      /^(\+?1[-.\s]?)?\(?[2-9][0-8][0-9]\)?[-.\s]?[2-9][0-9]{2}[-.\s]?[0-9]{4}$/,
-
-      // International format with country code - +1 555 123 4567
-      /^\+[1-9]\d{1,14}$/,
-
-      // UK - +44 20 7946 0958, 020 7946 0958
-      /^(\+44\s?|0)[1-9]\d{8,9}$/,
-
-      // Germany - +49 30 12345678, 030 12345678
-      /^(\+49\s?|0)[1-9]\d{7,11}$/,
-
-      // France - +33 1 42 34 56 78, 01 42 34 56 78
-      /^(\+33\s?|0)[1-9](\s?\d{2}){4}$/,
-
-      // Italy - +39 06 1234 5678, 06 1234 5678
-      /^(\+39\s?|0)\d{2,3}\s?\d{6,8}$/,
-
-      // Spain - +34 91 123 45 67, 91 123 45 67
-      /^(\+34\s?|0)?[6-9]\d{8}$/,
-
-      // China - +86 138 0013 8000, 138 0013 8000
-      /^(\+86\s?|0)?1[3-9]\d{9}$/,
-
-      // Japan - +81 90 1234 5678, 090-1234-5678
-      /^(\+81\s?|0)[7-9]0[-\s]?\d{4}[-\s]?\d{4}$/,
-
-      // India - +91 98765 43210, 98765 43210
-      /^(\+91\s?|0)?[6-9]\d{9}$/,
-
-      // South Korea - +82 10 1234 5678, 010-1234-5678
-      /^(\+82\s?|0)?10[-\s]?\d{4}[-\s]?\d{4}$/,
-
-      // Australia - +61 4 1234 5678, 04 1234 5678
-      /^(\+61\s?|0)?4\d{8}$/,
-
-      // New Zealand - +64 21 123 456, 021 123 456
-      /^(\+64\s?|0)?2[0-9]\s?\d{3}\s?\d{3,4}$/,
-
-      // UAE - +971 50 123 4567, 050 123 4567
-      /^(\+971\s?|0)?5[0-9]\s?\d{3}\s?\d{4}$/,
-
-      // Saudi Arabia - +966 50 123 4567, 050 123 4567
-      /^(\+966\s?|0)?5[0-9]\s?\d{3}\s?\d{4}$/,
-
-      // South Africa - +27 82 123 4567, 082 123 4567
-      /^(\+27\s?|0)?[6-8][0-9]\s?\d{3}\s?\d{4}$/,
-
-      // Nigeria - +234 803 123 4567, 0803 123 4567
-      /^(\+234\s?|0)?[7-9][0-1]\d\s?\d{3}\s?\d{4}$/,
-
-      // Mexico - +52 55 1234 5678, 55 1234 5678
-      /^(\+52\s?|0)?[1-9]\d\s?\d{4}\s?\d{4}$/,
-
-      // Brazil - +55 11 91234 5678, 11 91234-5678
-      /^(\+55\s?|0)?[1-9]{2}\s?9?\d{4}[-\s]?\d{4}$/,
-
-      // Argentina - +54 11 1234 5678, 11 1234-5678
-      /^(\+54\s?|0)?[1-9]{2,4}\s?\d{4}[-\s]?\d{4}$/,
-
-      // Generic international format (7-15 digits with optional country code)
-      /^\+?[1-9]\d{6,14}$/,
-
-      // Generic format with separators (minimum 7 digits)
-      /^[\+]?[\d\s\-\(\)\.]{7,}$/,
-    ];
-
-    const cleanText = text.trim().replace(/\s+/g, ' ');
-    const isPhone = phonePatterns.some(pattern => pattern.test(cleanText));
-
-    if (isPhone) {
-      console.log('✅ Phone number detected');
-    } else {
-      console.log('❌ Not a phone number');
-    }
-    return isPhone;
+  private isNumbersCategory(text: string): boolean {
+    console.log('🔢 Checking numbers category:', text.substring(0, 50) + '...');
+    const ok = isClipboardNumbersCategory(text);
+    console.log(ok ? '✅ Numbers category matched' : '❌ Not numbers-only');
+    return ok;
   }
 
   private isCode(text: string): boolean {
@@ -769,6 +694,8 @@ export class ClipboardMonitor {
 
   // Helper method to determine if HTML content is actually rich text
   private isRichHTML(html: string, plainText: string): boolean {
+    const normalizedPlain = plainText.replace(/\s+/g, ' ').trim();
+
     // Remove common wrapper elements that don't add formatting
     const cleanHTML = html
       .replace(/<html[^>]*>/gi, '')
@@ -779,6 +706,23 @@ export class ClipboardMonitor {
       .replace(/<meta[^>]*>/gi, '')
       .replace(/<!--.*?-->/gs, '')
       .trim();
+
+    const htmlTextContent = cleanHTML
+      .replace(/<[^>]*>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Cursor, VS Code, Chromium UIs often put text/html that is only <span>/<div>/<p>
+    // around the same string as text/plain — not real rich text.
+    if (
+      htmlTextContent === normalizedPlain &&
+      !/style\s*=/i.test(html) &&
+      !/<\s*(a|b|strong|i|em|u|font|h[1-6]|table|tr|td|th|ul|ol|li|img|script|style)\b/i.test(
+        html
+      )
+    ) {
+      return false;
+    }
 
     // Check if HTML contains actual formatting elements
     const formattingTags = [
@@ -822,8 +766,11 @@ export class ClipboardMonitor {
     const hasInlineStyles = /style\s*=\s*["'][^"']*["']/i.test(cleanHTML);
 
     // Check if the HTML content is significantly different from plain text
-    const htmlTextContent = cleanHTML.replace(/<[^>]*>/g, '').trim();
-    const isSignificantlyDifferent = htmlTextContent !== plainText.trim();
+    const strippedForCompare = cleanHTML
+      .replace(/<[^>]*>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const isSignificantlyDifferent = strippedForCompare !== normalizedPlain;
 
     return hasFormattingTags || hasInlineStyles || isSignificantlyDifferent;
   }
