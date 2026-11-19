@@ -69,11 +69,30 @@
 
 ### Download Pre-built Binaries
 
-Visit our [Releases page](https://github.com/ahadalichowdhury/LocalClip/releases) to download the latest version:
+Download **`LocalClip_<version>_universal.dmg`** from the
+[Releases page](https://github.com/ahadalichowdhury/LocalClip-app/releases/latest).
+It runs on Apple Silicon and Intel Macs (macOS 11+).
 
-- **Windows**: `LocalClip-Setup-1.0.0.exe` or `LocalClip-1.0.0-portable.exe`
-- **macOS**: `LocalClip-1.0.0.dmg` or `LocalClip-1.0.0-mac.zip`
-- **Linux**: `LocalClip-1.0.0.AppImage` or `LocalClip-1.0.0.deb`
+1. Open the DMG and drag **LocalClip** into **Applications**.
+2. First launch: if macOS says it can't check the app, open
+   **System Settings → Privacy & Security** and click **Open Anyway**
+   (the app isn't notarized by Apple yet).
+3. Press **⌘⇧V** anywhere to open your clipboard history.
+
+### Publishing a release (maintainers)
+
+Push a version tag; GitHub Actions (`.github/workflows/release.yml`) runs the
+tests, builds a universal DMG and attaches it to a GitHub Release for that tag:
+
+```bash
+git tag v2.0.1
+git push origin v2.0.1
+```
+
+The app version is taken from the tag. To ship a signed and notarized build,
+add the repository secrets `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`,
+`APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID`;
+without them the app is ad-hoc signed.
 
 ### Build from Source
 

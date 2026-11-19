@@ -275,6 +275,9 @@ mod tests {
     /// Uses the real `screencapture` tool; skipped where it isn't available.
     #[test]
     fn real_screenshot_is_recognised() {
+        if std::env::var_os("CI").is_some() {
+            return; // CI machines have no screen to capture
+        }
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("shot.png");
         let ok = std::process::Command::new("screencapture")
@@ -297,6 +300,9 @@ mod tests {
     /// End-to-end timing of the detection path: FSEvents → marker → read.
     #[test]
     fn detects_new_screenshot_quickly() {
+        if std::env::var_os("CI").is_some() {
+            return; // CI machines have no screen to capture
+        }
         use notify::{EventKind, RecursiveMode, Watcher};
         let dir = tempfile::tempdir().unwrap();
         // FSEvents reports real paths (/var → /private/var)

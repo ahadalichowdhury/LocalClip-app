@@ -1,6 +1,6 @@
 [package]
 name = "localclip"
-version = "1.0.0"
+version = "2.0.0"
 description = "A Windows 11-inspired clipboard manager for macOS"
 authors = ["S. M. Ahad Ali Chowdhury"]
 license = "MIT"

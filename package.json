@@ -1,6 +1,6 @@
 {
   "name": "localclip",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "A modern, Windows 11-inspired clipboard manager for macOS (Tauri + Rust)",
   "homepage": "https://github.com/ahadalichowdhury/LocalClip",
   "author": {
