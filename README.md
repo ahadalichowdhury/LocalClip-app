@@ -67,17 +67,95 @@
 
 ## 🚀 Installation
 
-### Download Pre-built Binaries
+### Install on your Mac
 
-Download **`LocalClip_<version>_universal.dmg`** from the
-[Releases page](https://github.com/ahadalichowdhury/LocalClip-app/releases/latest).
-It runs on Apple Silicon and Intel Macs (macOS 11+).
+LocalClip runs on **macOS 11 or later**, on both Apple Silicon (M1–M4) and
+Intel Macs — there is one download for both.
 
-1. Open the DMG and drag **LocalClip** into **Applications**.
-2. First launch: if macOS says it can't check the app, open
-   **System Settings → Privacy & Security** and click **Open Anyway**
-   (the app isn't notarized by Apple yet).
-3. Press **⌘⇧V** anywhere to open your clipboard history.
+#### 1. Download
+
+Go to the [latest release](https://github.com/ahadalichowdhury/LocalClip-app/releases/latest)
+and download **`LocalClip_<version>_universal.dmg`** (about 5 MB).
+
+#### 2. Copy it to Applications
+
+1. Double-click the downloaded `.dmg` file. A window opens with the
+   **LocalClip** app and an **Applications** folder.
+2. **Drag LocalClip onto the Applications folder.**
+3. Eject the disk image (click ⏏ next to "LocalClip" in Finder's sidebar).
+
+> Don't open LocalClip from inside the disk image window — macOS blocks apps
+> run from there. Always open the copy in **Applications**.
+
+#### 3. Open it the first time
+
+LocalClip isn't notarized by Apple yet, so the first time you open it macOS
+shows:
+
+> **"LocalClip" can't be opened because Apple cannot check it for malicious software.**
+
+Click **OK** (not "Move to Trash"), then use **one** of these ways — you only
+have to do this once:
+
+- **Right-click → Open:** in **Applications**, right-click (or Control-click)
+  **LocalClip**, choose **Open**, then click **Open** in the dialog.
+- **Open Anyway:** open **System Settings → Privacy & Security**, scroll down to
+  *"LocalClip" was blocked to protect your Mac* and click **Open Anyway**, then
+  **Open**. (On macOS 15 and later this is the only way without Terminal.)
+- **Terminal:** run this, then open LocalClip normally:
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/LocalClip.app
+  ```
+
+#### 4. Allow auto-paste (Accessibility)
+
+LocalClip pastes into the app you were using by pressing ⌘V for you, which
+macOS only allows after you give permission:
+
+1. Open **System Settings → Privacy & Security → Accessibility**.
+2. Turn on **LocalClip** (use **+** to add it from Applications if it isn't listed).
+
+Without this, picking a clip still copies it — just press ⌘V yourself.
+
+#### 5. Use it
+
+| Shortcut | What it does |
+|---|---|
+| **⌘⇧V** | Open / close the clipboard (works over fullscreen apps too) |
+| **↑ ↓** then **↵** | Choose a clip and paste it |
+| **⌘1 … ⌘9** | Paste the clip with that number |
+| **⌘E** | Switch between Clipboard and Emoji |
+| **⌘P** / **⌘⌫** | Pin / delete the selected clip |
+| **esc** | Clear the search, then close |
+
+- Screenshots you take (⌘⇧3, ⌘⇧4, ⌘⇧5) appear in the list and are copied,
+  ready to paste. To make that instant, LocalClip turns off the small
+  screenshot preview in the screen corner; turn it back on in
+  ⌘⇧5 → **Options → Show Floating Thumbnail**.
+- Change the shortcut, highlight colour, glass effect and more in **Settings**
+  (the slider icon next to the search box). LocalClip also lives in the menu bar.
+
+#### Updating
+
+Download the new DMG and drag LocalClip into Applications again, choosing
+**Replace**. Your history and settings are kept. You may need to repeat
+step 3 once.
+
+#### Uninstalling
+
+Quit LocalClip from the menu bar icon, drag **LocalClip** from Applications to
+the Trash, and (to remove your history too) delete
+`~/Library/Application Support/com.localclip.app`.
+
+#### Troubleshooting
+
+- **Picking a clip doesn't paste** — check step 4. After an update, macOS may
+  not recognise the new version: in **Accessibility**, select LocalClip, remove
+  it with **−**, then add it again with **+**.
+- **⌘⇧V does nothing** — another app may already use that shortcut. Open
+  LocalClip from the menu bar icon → **Settings** and pick a different one.
+- **"LocalClip is damaged and can't be opened"** — run the Terminal command
+  from step 3.
 
 ### Publishing a release (maintainers)
 
@@ -120,44 +198,19 @@ npm run build
 
 ## 🎯 Usage
 
-### Quick Start
+See **[Use it](#5-use-it)** above for the keyboard shortcuts.
 
-1. **Launch LocalClip** from your applications menu
-2. **Copy anything** to your clipboard - it's automatically saved
-3. **Press `Ctrl/Cmd + Shift + V`** to open the clipboard manager
-4. **Click any item** to paste it instantly
-5. **Pin important items** using the pin icon
-6. **Search and filter** to find what you need quickly
+### Settings
 
-### Keyboard Shortcuts
+Open Settings from the slider icon next to the search box, or from the menu
+bar icon → **Settings…**
 
-| Shortcut               | Action                     |
-| ---------------------- | -------------------------- |
-| `Ctrl/Cmd + Shift + V` | Show/Hide LocalClip window |
-| `Ctrl/Cmd + Shift + C` | Clear clipboard history    |
-| `Ctrl/Cmd + Shift + P` | Pin current clipboard item |
-| `Escape`               | Hide window                |
-| `Enter`                | Paste selected item        |
-| `Delete`               | Remove selected item       |
-| `Ctrl/Cmd + F`         | Focus search box           |
-| `↑/↓`                  | Navigate items             |
-
-### Configuration
-
-Access settings through:
-
-- **System tray** → Right-click → Settings
-- **Main window** → Settings icon (⚙️)
-- **Keyboard** → `Ctrl/Cmd + ,`
-
-#### Key Settings
-
-- **Max History Items**: 40-1000 entries (default: 40)
-- **Global Hotkey**: Customize the main shortcut
-- **Auto-start**: Launch on system startup
-- **Theme**: Light, Dark, or Auto
-- **Excluded Apps**: Prevent monitoring specific applications
-- **Auto-cleanup**: Automatically remove old entries
+- **Shortcut** to open LocalClip (default ⌘⇧V)
+- **Save what I copy** — pause recording without quitting
+- **Sort clips by kind** — Links, Code, Numbers, Images… filters
+- **Keep the last 20–100 clips** (default 40); pinned clips are never removed
+- **Highlight colour**, **Glass effect** with opacity, **Theme**, **Text size**
+- **Open at login**, **Hide from Dock**
 
 ## 🛠️ Development
 
