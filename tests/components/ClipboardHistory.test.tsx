@@ -97,18 +97,18 @@ describe('ClipboardHistory', () => {
     render(<ClipboardHistory {...mockProps} />);
 
     // Should show pinned section
-    expect(screen.getByText('📌 Pinned (1)')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pinned 1' })).toBeInTheDocument();
 
     // Should show recent section
-    expect(screen.getByText('Recent (2)')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Recent 2' })).toBeInTheDocument();
   });
 
   it('should handle empty entries list', () => {
     render(<ClipboardHistory {...mockProps} entries={[]} />);
 
     // Should not crash and should render empty state
-    expect(screen.queryByText('📌 Pinned')).not.toBeInTheDocument();
-    expect(screen.queryByText('Recent')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Pinned/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Recent/ })).not.toBeInTheDocument();
   });
 
   it('should show only pinned section when no unpinned entries', () => {
@@ -116,8 +116,8 @@ describe('ClipboardHistory', () => {
 
     render(<ClipboardHistory {...mockProps} entries={pinnedOnlyEntries} />);
 
-    expect(screen.getByText('📌 Pinned (1)')).toBeInTheDocument();
-    expect(screen.queryByText('Recent')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pinned 1' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Recent/ })).not.toBeInTheDocument();
   });
 
   it('should show only recent section when no pinned entries', () => {
@@ -125,8 +125,8 @@ describe('ClipboardHistory', () => {
 
     render(<ClipboardHistory {...mockProps} entries={unpinnedOnlyEntries} />);
 
-    expect(screen.queryByText('📌 Pinned')).not.toBeInTheDocument();
-    expect(screen.queryByText('Recent')).not.toBeInTheDocument(); // No header when no pinned items
+    expect(screen.queryByRole('heading', { name: /Pinned/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Recent/ })).not.toBeInTheDocument(); // No header when no pinned items
   });
 
   it('should handle selected index correctly', () => {

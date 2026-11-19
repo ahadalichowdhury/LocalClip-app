@@ -101,3 +101,7 @@ jspm_packages/
 
 # TernJS port file
 .tern-port
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/

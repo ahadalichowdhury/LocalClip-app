@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-const SHOW_DELAY_MS = 400;
+const SHOW_DELAY_MS = 500;
 
 type ActionTooltipProps = {
   label: string;
@@ -12,7 +12,7 @@ type ActionTooltipProps = {
 
 /**
  * Fixed-position tooltip portaled to document.body so it is not clipped by
- * overflow scroll areas and sits above the app content in Electron.
+ * overflow scroll areas and sits above the app content.
  */
 export const ActionTooltip: React.FC<ActionTooltipProps> = ({
   label,
@@ -94,7 +94,7 @@ export const ActionTooltip: React.FC<ActionTooltipProps> = ({
         createPortal(
           <div
             role="tooltip"
-            className="fixed z-[99999] max-w-xs whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs text-white shadow-lg pointer-events-none dark:bg-gray-800 dark:ring-1 dark:ring-gray-600"
+            className="lc-tooltip"
             style={{
               left: coords.left,
               top: coords.top,

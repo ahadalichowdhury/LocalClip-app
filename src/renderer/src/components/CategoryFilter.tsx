@@ -4,6 +4,7 @@ import {
   entryMatchesCategoryChip,
 } from '../../../shared/category-display';
 import { ClipboardEntry } from '../../../shared/types';
+import { kindOf } from '../lib/kinds';
 
 interface CategoryFilterProps {
   selectedCategory: string;
@@ -11,91 +12,77 @@ interface CategoryFilterProps {
   entries: ClipboardEntry[];
 }
 
+// Most-used kinds first; anything unknown goes after, alphabetically.
+const ORDER = [
+  'Text',
+  'URLs',
+  'Code',
+  'Images',
+  'Numbers',
+  'Email Addresses',
+  'Rich Text',
+  'Files',
+];
+
 export const CategoryFilter: React.FC<CategoryFilterProps> = ({
   selectedCategory,
   onCategoryChange,
   entries,
 }) => {
-  // Get unique categories from entries
   const categories = React.useMemo(() => {
-    const categorySet = new Set<string>();
-    entries.forEach(entry => {
-      if (entry.category) {
-        categorySet.add(categoryDisplayLabel(entry.category));
-      }
+    const counts = new Map<string, number>();
+    entries.forEach(e => {
+      const c = categoryDisplayLabel(e.category);
+      counts.set(c, (counts.get(c) ?? 0) + 1);
     });
-    return Array.from(categorySet).sort();
+    return Array.from(counts.keys()).sort((a, b) => {
+      const ia = ORDER.indexOf(a);
+      const ib = ORDER.indexOf(b);
+      if (ia === -1 && ib === -1) return a.localeCompare(b);
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
   }, [entries]);
 
-  const getCategoryIcon = (category: string) => {
-    switch (category.toLowerCase()) {
-      case 'text':
-        return '📝';
-      case 'rich text':
-        return '📄✨';
-      case 'urls':
-        return '🔗';
-      case 'images':
-        return '🖼️';
-      case 'files':
-        return '📁';
-      case 'code':
-        return '💻';
-      case 'email addresses':
-        return '📧';
-      case 'numbers':
-        return '🔢';
-      case 'phone numbers':
-        return '🔢';
-      default:
-        return '📄';
-    }
-  };
+  // A single kind isn't worth filtering.
+  if (categories.length < 2) return null;
 
-  const getCategoryCount = (category: string) => {
-    if (category === 'all') {
-      return entries.length;
-    }
-    return entries.filter(entry =>
-      entryMatchesCategoryChip(entry.category, category)
-    ).length;
-  };
+  const count = (c: string) =>
+    entries.filter(e => entryMatchesCategoryChip(e.category, c)).length;
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <nav className="lc-filters" aria-label="Filter by kind">
       <button
+        type="button"
+        className="lc-chip"
+        aria-pressed={selectedCategory === 'all'}
         onClick={() => onCategoryChange('all')}
-        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-          selectedCategory === 'all'
-            ? 'bg-primary-500 text-white'
-            : 'bg-light-bg-secondary dark:bg-dark-bg-secondary text-light-text-secondary dark:text-dark-text-secondary hover:bg-light-bg-tertiary dark:hover:bg-dark-bg-tertiary'
-        }`}
       >
-        All ({getCategoryCount('all')})
+        All <span className="lc-count">{entries.length}</span>
       </button>
-
-      {categories.map(category => (
-        <button
-          key={category}
-          onClick={() => onCategoryChange(category)}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center space-x-1 ${
-            selectedCategory === category
-              ? 'bg-primary-500 text-white'
-              : 'bg-light-bg-secondary dark:bg-dark-bg-secondary text-light-text-secondary dark:text-dark-text-secondary hover:bg-light-bg-tertiary dark:hover:bg-dark-bg-tertiary'
-          }`}
-        >
-          <span>{getCategoryIcon(category)}</span>
-          <span>
-            {category} ({getCategoryCount(category)})
-          </span>
-        </button>
-      ))}
-
-      {categories.length === 0 && entries.length > 0 && (
-        <div className="text-light-text-secondary dark:text-dark-text-secondary text-sm">
-          No categories yet
-        </div>
-      )}
-    </div>
+      {categories.map(c => {
+        const k = kindOf(c);
+        const Icon = k.icon;
+        const active = selectedCategory === c;
+        return (
+          <button
+            key={c}
+            type="button"
+            className="lc-chip"
+            aria-pressed={active}
+            onClick={() => onCategoryChange(active ? 'all' : c)}
+          >
+            <Icon
+              size={13}
+              strokeWidth={2.2}
+              style={{ color: active ? undefined : k.color }}
+              aria-hidden
+            />
+            {k.label} <span className="lc-count">{count(c)}</span>
+          </button>
+        );
+      })}
+    </nav>
   );
 };

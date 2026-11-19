@@ -39,8 +39,5 @@
     "release",
     "**/*.test.ts",
     "**/*.test.tsx"
-  ],
-  "references": [
-    { "path": "./tsconfig.node.json" }
   ]
 } 

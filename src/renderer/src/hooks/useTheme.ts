@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { applyGlass } from '../lib/glass';
+import { applyHighlight } from '../lib/highlight';
 
 export function useTheme() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -12,6 +14,8 @@ export function useTheme() {
   useEffect(() => {
     if (settings) {
       applyTheme(settings.theme);
+      applyHighlight(settings.highlightColor);
+      applyGlass(settings.glassEffect, settings.glassOpacity);
     }
   }, [settings]);
 

@@ -1,4 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Check } from 'lucide-react';
+import { applyGlass, GLASS_MAX, GLASS_MIN } from '../lib/glass';
+import { applyHighlight, HIGHLIGHTS, HighlightName } from '../lib/highlight';
+import { hotkeyParts } from '../lib/kinds';
+import { Sheet } from './Sheet';
 import '../../../shared/electronAPI';
 import { Settings as SettingsType } from '../../../shared/types';
 import { useFontSize } from '../hooks/useFontSize';
@@ -9,6 +14,51 @@ interface SettingsProps {
   onClose: () => void;
 }
 
+const Switch = ({
+  id,
+  checked,
+  onChange,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) => (
+  <button
+    id={id}
+    type="button"
+    role="switch"
+    className="lc-switch"
+    aria-checked={checked}
+    onClick={() => onChange(!checked)}
+  />
+);
+
+const Seg = <T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: T;
+  options: [T, string][];
+  onChange: (v: T) => void;
+  label: string;
+}) => (
+  <div className="lc-seg" role="group" aria-label={label}>
+    {options.map(([v, text]) => (
+      <button
+        key={v}
+        type="button"
+        aria-pressed={value === v}
+        onClick={() => onChange(v)}
+      >
+        {text}
+      </button>
+    ))}
+  </div>
+);
+
+
 export function Settings({ isOpen, onClose }: SettingsProps) {
   const [settings, setSettings] = useState<SettingsType | null>(null);
   const [currentHotkey, setCurrentHotkey] = useState('');
@@ -17,6 +67,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [platform, setPlatform] = useState<string>('');
+  const [hotkeyError, setHotkeyError] = useState<string | null>(null);
 
   // Use theme and font size hooks
   const { updateTheme, refreshSettings: refreshTheme } = useTheme();
@@ -74,6 +125,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
   };
 
   const handleHotkeyRecord = () => {
+    setHotkeyError(null);
     setIsRecording(true);
     setTempHotkey('');
   };
@@ -217,7 +269,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
         console.error(
           'Hotkey must include at least one modifier (Cmd/Ctrl, Alt, or Shift)'
         );
-        alert(
+        setHotkeyError(
           'Hotkey must include at least one modifier key (Cmd/Ctrl, Alt, or Shift) for security reasons.'
         );
         return;
@@ -225,7 +277,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
 
       if (mainKeys.length === 0) {
         console.error('Hotkey must include a main key');
-        alert(
+        setHotkeyError(
           'Hotkey must include a main key (letter, number, or function key).'
         );
         return;
@@ -242,13 +294,13 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
         console.log('Hotkey updated successfully:', electronHotkey);
       } else {
         console.error('Failed to register hotkey:', electronHotkey);
-        alert(
+        setHotkeyError(
           'Failed to register hotkey. It might be already in use by another application.'
         );
       }
     } catch (error) {
       console.error('Failed to update hotkey:', error);
-      alert('Failed to update hotkey: ' + error);
+      setHotkeyError('Failed to update hotkey: ' + error);
     }
   };
 
@@ -263,7 +315,12 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
       setSettings(prev => (prev ? { ...prev, [key]: value } : null));
 
       // Handle special settings that need immediate application
-      if (key === 'theme') {
+      if (key === 'highlightColor') {
+        applyHighlight(value);
+      } else if (key === 'glassEffect' || key === 'glassOpacity') {
+        const next = { ...settings, [key]: value } as SettingsType;
+        applyGlass(next.glassEffect, next.glassOpacity);
+      } else if (key === 'theme') {
         await updateTheme(value);
         await refreshTheme();
       } else if (key === 'fontSize') {
@@ -275,344 +332,281 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
     }
   };
 
-  if (!isOpen) {
-    console.log('Settings not open, returning null');
-    return null;
-  }
+  if (!isOpen) return null;
 
-  console.log(
-    'Rendering settings component, loading:',
-    loading,
-    'settings:',
-    settings,
-    'error:',
-    error
-  );
+  const pendingHotkey =
+    tempHotkey && !tempHotkey.includes('(needs modifier)') ? tempHotkey : '';
+
+  const hotkeyField = () => {
+    if (isRecording) {
+      return tempHotkey ? (
+        <span>{tempHotkey}</span>
+      ) : (
+        <span>Press the new shortcut…</span>
+      );
+    }
+    const shown = pendingHotkey
+      ? pendingHotkey.replace(/Command|Control/, 'CommandOrControl')
+      : currentHotkey;
+    if (!shown) return <span>No shortcut set</span>;
+    return hotkeyParts(shown).map((k, i) => <kbd key={i}>{k}</kbd>);
+  };
+
+  const content = () => {
+    if (loading) return <p>Loading settings...</p>;
+    if (error || !settings) {
+      return (
+        <>
+          <p>{error ?? 'Settings could not be read.'}</p>
+          <button type="button" className="lc-btn" onClick={loadSettings}>
+            Try again
+          </button>
+        </>
+      );
+    }
+    return (
+      <>
+        <section className="lc-group">
+          <h3>Open LocalClip</h3>
+          <div className="lc-group-box">
+            <div className="lc-setting is-stacked">
+              <div className="lc-hotkey">
+                <div
+                  className={`lc-hotkey-field${isRecording ? ' is-recording' : ''}`}
+                  onKeyDown={handleKeyDown}
+                  onKeyUp={handleKeyUp}
+                  tabIndex={0}
+                  aria-label="Keyboard shortcut"
+                  data-keep-escape={isRecording || undefined}
+                >
+                  {hotkeyField()}
+                </div>
+                {isRecording ? (
+                  <button type="button" className="lc-btn" onClick={cancelHotkeyRecord}>
+                    Cancel
+                  </button>
+                ) : pendingHotkey ? (
+                  <>
+                    <button type="button" className="lc-btn" onClick={cancelHotkeyRecord}>
+                      Cancel
+                    </button>
+                    <button type="button" className="lc-btn is-primary" onClick={applyHotkey}>
+                      Save
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="lc-btn"
+                    onClick={() => {
+                      handleHotkeyRecord();
+                      setTimeout(
+                        () =>
+                          (
+                            document.querySelector('.lc-hotkey-field') as HTMLElement
+                          )?.focus(),
+                        0
+                      );
+                    }}
+                  >
+                    Change
+                  </button>
+                )}
+              </div>
+              <small style={{ color: hotkeyError ? 'var(--danger)' : 'var(--muted)' }}>
+                {hotkeyError ??
+                  (isRecording
+                    ? 'Hold a modifier (⌘, ⌥, ⇧) and press a key.'
+                    : 'Works from any app, including fullscreen ones.')}
+              </small>
+            </div>
+          </div>
+        </section>
+
+        <section className="lc-group">
+          <h3>History</h3>
+          <div className="lc-group-box">
+            <div className="lc-setting">
+              <div className="lc-setting-text">
+                <label htmlFor="s-monitor">Save what I copy</label>
+                <small>Turn off to pause recording without quitting.</small>
+              </div>
+              <Switch
+                id="s-monitor"
+                checked={settings.monitorClipboard}
+                onChange={v => updateSetting('monitorClipboard', v)}
+              />
+            </div>
+            <div className="lc-setting">
+              <div className="lc-setting-text">
+                <label htmlFor="s-categories">Sort clips by kind</label>
+                <small>Shows the Links, Code, Numbers… filters.</small>
+              </div>
+              <Switch
+                id="s-categories"
+                checked={settings.autoCategories}
+                onChange={v => updateSetting('autoCategories', v)}
+              />
+            </div>
+            <div className="lc-setting is-stacked">
+              <div className="lc-setting-text">
+                <label htmlFor="s-max">
+                  Keep the last {settings.maxHistoryItems} clips
+                </label>
+                <small>Older unpinned clips are removed first. Pinned clips always stay.</small>
+              </div>
+              <input
+                id="s-max"
+                className="lc-range"
+                type="range"
+                min="20"
+                max="100"
+                step="5"
+                value={settings.maxHistoryItems}
+                onChange={e => updateSetting('maxHistoryItems', parseInt(e.target.value))}
+              />
+              <div className="lc-range-scale" aria-hidden>
+                <span>20</span>
+                <span>100</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="lc-group">
+          <h3>Appearance</h3>
+          <div className="lc-group-box">
+            <div className="lc-setting">
+              <div className="lc-setting-text">
+                <label htmlFor="s-glass">Glass effect</label>
+                <small>See your desktop through a frosted popup.</small>
+              </div>
+              <Switch
+                id="s-glass"
+                checked={!!settings.glassEffect}
+                onChange={v => updateSetting('glassEffect', v)}
+              />
+            </div>
+            {settings.glassEffect && (
+              <div className="lc-setting is-stacked">
+                <div className="lc-setting-text">
+                  <label htmlFor="s-glass-opacity">
+                    Opacity {settings.glassOpacity ?? 70}%
+                  </label>
+                  <small>Lower shows more of what&rsquo;s behind the popup.</small>
+                </div>
+                <input
+                  id="s-glass-opacity"
+                  className="lc-range"
+                  type="range"
+                  min={GLASS_MIN}
+                  max={GLASS_MAX}
+                  step="5"
+                  value={settings.glassOpacity ?? 70}
+                  onChange={e => updateSetting('glassOpacity', parseInt(e.target.value))}
+                />
+                <div className="lc-range-scale" aria-hidden>
+                  <span>More see-through</span>
+                  <span>Solid</span>
+                </div>
+              </div>
+            )}
+            <div className="lc-setting is-stacked">
+              <div className="lc-setting-text">
+                <strong id="s-highlight">Highlight colour</strong>
+                <small>Marks the clip that ↵ will paste.</small>
+              </div>
+              <div className="lc-swatches" role="radiogroup" aria-labelledby="s-highlight">
+                {(Object.keys(HIGHLIGHTS) as HighlightName[]).map(name => {
+                  const selected = (settings.highlightColor || 'yellow') === name;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      role="radio"
+                      className="lc-swatch"
+                      aria-checked={selected}
+                      aria-label={HIGHLIGHTS[name].label}
+                      title={HIGHLIGHTS[name].label}
+                      style={{ '--sw': HIGHLIGHTS[name].hex } as React.CSSProperties}
+                      onClick={() => updateSetting('highlightColor', name)}
+                    >
+                      {selected && <Check size={14} strokeWidth={3} aria-hidden />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="lc-setting is-stacked">
+              <div className="lc-setting-text">
+                <strong>Theme</strong>
+              </div>
+              <Seg
+                label="Theme"
+                value={settings.theme}
+                options={[
+                  ['auto', 'System'],
+                  ['light', 'Light'],
+                  ['dark', 'Dark'],
+                ]}
+                onChange={v => updateSetting('theme', v)}
+              />
+            </div>
+            <div className="lc-setting is-stacked">
+              <div className="lc-setting-text">
+                <strong>Text size</strong>
+              </div>
+              <Seg
+                label="Text size"
+                value={settings.fontSize}
+                options={[
+                  ['small', 'Small'],
+                  ['medium', 'Medium'],
+                  ['large', 'Large'],
+                ]}
+                onChange={v => updateSetting('fontSize', v)}
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="lc-group">
+          <h3>System</h3>
+          <div className="lc-group-box">
+            <div className="lc-setting">
+              <div className="lc-setting-text">
+                <label htmlFor="s-autostart">Open at login</label>
+              </div>
+              <Switch
+                id="s-autostart"
+                checked={settings.autoStart}
+                onChange={v => updateSetting('autoStart', v)}
+              />
+            </div>
+            <div className="lc-setting">
+              <div className="lc-setting-text">
+                <label htmlFor="s-dock">Hide from Dock</label>
+                <small>
+                  {platform === 'darwin'
+                    ? 'LocalClip stays in the menu bar.'
+                    : 'LocalClip stays in the system tray.'}
+                </small>
+              </div>
+              <Switch
+                id="s-dock"
+                checked={settings.hideFromDock}
+                onChange={v => updateSetting('hideFromDock', v)}
+              />
+            </div>
+          </div>
+        </section>
+      </>
+    );
+  };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-light-bg-primary dark:bg-dark-bg-primary rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-light-border dark:border-dark-border">
-          <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary">
-            Settings
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-light-text-secondary dark:text-dark-text-secondary hover:text-light-text-primary dark:hover:text-dark-text-primary transition-colors"
-          >
-            ✕
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="p-6 text-center">
-            <div className="text-light-text-secondary dark:text-dark-text-secondary">
-              Loading settings...
-            </div>
-          </div>
-        ) : error ? (
-          <div className="p-6 text-center">
-            <div className="text-red-500 mb-4">{error}</div>
-            <button
-              onClick={loadSettings}
-              className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        ) : !settings ? (
-          <div className="p-6 text-center">
-            <div className="text-red-500">
-              Failed to load settings. Please try again.
-            </div>
-            <button
-              onClick={loadSettings}
-              className="mt-4 px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        ) : (
-          <div className="p-6 space-y-6">
-            {/* Global Hotkey Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium text-light-text-primary dark:text-dark-text-primary">
-                Global Hotkey
-              </h3>
-              <div className="space-y-3">
-                <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                  Press this key combination from anywhere to open LocalClip.
-                  Click "Change" and then press your desired key combination.
-                  <br />
-                  <strong>Note:</strong> Must include at least one modifier
-                  (Cmd/Ctrl, Alt, or Shift) + a main key for security.
-                </p>
-
-                <div className="flex items-center space-x-3">
-                  <div className="flex-1">
-                    <div
-                      className={`
-                        px-4 py-3 border rounded-md text-center font-mono
-                        ${
-                          isRecording
-                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                            : 'border-light-border dark:border-dark-border bg-light-bg-secondary dark:bg-dark-bg-secondary'
-                        }
-                      `}
-                      onKeyDown={handleKeyDown}
-                      onKeyUp={handleKeyUp}
-                      tabIndex={0}
-                    >
-                      {isRecording ? (
-                        <span className="text-primary-600 dark:text-primary-400">
-                          {tempHotkey || 'Press keys...'}
-                        </span>
-                      ) : tempHotkey &&
-                        !tempHotkey.includes('(needs modifier)') ? (
-                        <span className="text-orange-600 dark:text-orange-400">
-                          {tempHotkey} (not saved)
-                        </span>
-                      ) : (
-                        <span className="text-light-text-primary dark:text-dark-text-primary">
-                          {currentHotkey || 'No hotkey set'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {isRecording ? (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={cancelHotkeyRecord}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : tempHotkey && !tempHotkey.includes('(needs modifier)') ? (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={applyHotkey}
-                        className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={cancelHotkeyRecord}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={handleHotkeyRecord}
-                      className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors"
-                    >
-                      Change
-                    </button>
-                  )}
-                </div>
-
-                <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                  {isRecording ? (
-                    'Press your desired key combination...'
-                  ) : tempHotkey && !tempHotkey.includes('(needs modifier)') ? (
-                    'Click "Save" to apply the new hotkey or "Cancel" to discard.'
-                  ) : (
-                    <>
-                      Valid examples: Cmd+V, Ctrl+Shift+C, Alt+F1, Shift+Space
-                      {currentHotkey && (
-                        <>
-                          <br />
-                          Current:{' '}
-                          <span className="font-mono">{currentHotkey}</span>
-                        </>
-                      )}
-                    </>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            {/* General Settings */}
-            {settings && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-light-text-primary dark:text-dark-text-primary">
-                  General
-                </h3>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                        Auto-start with system
-                      </label>
-                      <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                        Launch LocalClip when your computer starts
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={settings.autoStart}
-                      onChange={e =>
-                        updateSetting('autoStart', e.target.checked)
-                      }
-                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                        Monitor clipboard
-                      </label>
-                      <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                        Automatically save copied content to history
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={settings.monitorClipboard}
-                      onChange={e =>
-                        updateSetting('monitorClipboard', e.target.checked)
-                      }
-                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                        Smart categorization
-                      </label>
-                      <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                        Automatically categorize clipboard entries
-                      </p>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={settings.autoCategories}
-                      onChange={e =>
-                        updateSetting('autoCategories', e.target.checked)
-                      }
-                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                      Maximum history items: {settings.maxHistoryItems}
-                    </label>
-                    <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                      When limit is reached, oldest items are automatically
-                      removed (FIFO)
-                    </p>
-                    <input
-                      type="range"
-                      min="20"
-                      max="100"
-                      step="5"
-                      value={settings.maxHistoryItems}
-                      onChange={e =>
-                        updateSetting(
-                          'maxHistoryItems',
-                          parseInt(e.target.value)
-                        )
-                      }
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                      <span>20</span>
-                      <span>40 (default)</span>
-                      <span>100</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                        Hide from dock
-                      </label>
-                      <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                        {platform === 'darwin'
-                          ? 'Hide from dock and show in menu bar'
-                          : 'Show in system tray instead of dock'}
-                      </p>
-                      {platform === 'darwin' && (
-                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                          When hidden, the app will be accessible from the menu
-                          bar icon
-                        </p>
-                      )}
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={settings.hideFromDock}
-                      onChange={e =>
-                        updateSetting('hideFromDock', e.target.checked)
-                      }
-                      className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Theme Settings */}
-            {settings && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-light-text-primary dark:text-dark-text-primary">
-                  Appearance
-                </h3>
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                      Theme
-                    </label>
-                    <select
-                      value={settings.theme}
-                      onChange={e => updateSetting('theme', e.target.value)}
-                      className="w-full px-3 py-2 border border-light-border dark:border-dark-border rounded-md bg-light-bg-secondary dark:bg-dark-bg-secondary text-light-text-primary dark:text-dark-text-primary"
-                    >
-                      <option value="light">Light</option>
-                      <option value="dark">Dark</option>
-                      <option value="auto">Auto (System)</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                      Font size
-                    </label>
-                    <select
-                      value={settings.fontSize}
-                      onChange={e => updateSetting('fontSize', e.target.value)}
-                      className="w-full px-3 py-2 border border-light-border dark:border-dark-border rounded-md bg-light-bg-secondary dark:bg-dark-bg-secondary text-light-text-primary dark:text-dark-text-primary"
-                    >
-                      <option value="small">Small</option>
-                      <option value="medium">Medium</option>
-                      <option value="large">Large</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="flex justify-end p-6 border-t border-light-border dark:border-dark-border">
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors"
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
+    <Sheet title="Settings" labelId="settings-title" onClose={onClose} full>
+      {content()}
+    </Sheet>
   );
 }

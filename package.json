@@ -1,8 +1,7 @@
 {
   "name": "localclip",
   "version": "1.0.0",
-  "description": "A modern, Windows 11-inspired clipboard manager with local storage and privacy-first design",
-  "main": "out/main/index.js",
+  "description": "A modern, Windows 11-inspired clipboard manager for macOS (Tauri + Rust)",
   "homepage": "https://github.com/ahadalichowdhury/LocalClip",
   "author": {
     "name": "S. M. Ahad Ali Chowdhury",
@@ -11,52 +10,26 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "dev": "electron-vite dev",
-    "dev:main": "cross-env NODE_ENV=development electron-vite dev",
-    "dev:renderer": "cross-env NODE_ENV=development electron-vite dev",
-    "build": "electron-vite build",
-    "build:main": "electron-vite build",
-    "build:renderer": "electron-vite build",
-    "preview": "electron-vite preview",
-    "start": "electron out/main/index.js",
-    "compile": "electron-vite build",
-    "package": "npm run build && electron-builder",
-    "package:win": "npm run build && electron-builder --win",
-    "package:mac": "npm run build && electron-builder --mac",
-    "package:linux": "npm run build && electron-builder --linux",
-    "dist": "npm run build && electron-builder --publish=never",
-    "dist:win": "npm run build && electron-builder --win --publish=never",
-    "dist:mac": "npm run build && electron-builder --mac --publish=never",
-    "dist:linux": "npm run build && electron-builder --linux --publish=never",
-    "dist:unsigned": "npm run build && electron-builder --mac --publish=never --config.mac.identity=null",
-    "dist:mac:x64": "npm run build && electron-builder --mac --x64 --publish=never",
-    "dist:mac:arm64": "npm run build && electron-builder --mac --arm64 --publish=never",
-    "dist:mac:universal": "npm run build && electron-builder --mac --universal --publish=never",
-    "dist:dev": "npm run build && electron-builder --mac --publish=never --config.mac.hardenedRuntime=false --config.mac.gatekeeperAssess=false",
-    "release": "npm run build && electron-builder --publish=always",
-    "release:mac": "npm run build && electron-builder --mac --publish=always",
-    "test": "jest",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:universal": "tauri build --target universal-apple-darwin",
+    "dev:web": "vite",
+    "build:web": "vite build",
+    "tauri": "tauri",
+    "test": "jest && npm run test:rust",
+    "test:js": "jest",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:e2e": "playwright test",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,css,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,css,md}\"",
-    "typecheck": "tsc --noEmit",
-    "postinstall": "electron-builder install-app-deps",
-    "create-icon": "node scripts/create-icon.js",
-    "create-dock-icon": "node scripts/create-dock-icon.js",
-    "create-icns": "node scripts/create-icns.js",
-    "create-localclip-icon": "node scripts/create-localclip-icon.js",
-    "create-about-icon": "node scripts/create-about-icon.js",
-    "setup:snap": "bash scripts/setup-snap.sh",
-    "setup:flatpak": "bash scripts/setup-flatpak.sh"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@electron/remote": "^2.0.12",
-    "electron-store": "^8.2.0",
-    "electron-updater": "^6.1.7",
+    "@tauri-apps/api": "^2.12.5",
+    "@tauri-apps/plugin-global-shortcut": "^2.4.1",
     "framer-motion": "^10.16.16",
     "fuse.js": "^7.0.0",
     "lucide-react": "^0.294.0",
@@ -65,10 +38,11 @@
     "react-hotkeys-hook": "^4.4.1",
     "react-virtualized-auto-sizer": "^1.0.20",
     "react-window": "^1.8.8",
+    "unicode-emoji-json": "0.8.0",
     "zustand": "^4.4.7"
   },
   "devDependencies": {
-    "@electron/notarize": "^2.2.1",
+    "@tauri-apps/cli": "^2.12.6",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
     "@testing-library/user-event": "^14.5.1",
@@ -81,17 +55,12 @@
     "@typescript-eslint/parser": "^6.13.1",
     "@vitejs/plugin-react": "^4.2.0",
     "autoprefixer": "^10.4.16",
-    "cross-env": "^7.0.3",
-    "electron": "^36.3.1",
-    "electron-builder": "^24.8.1",
-    "electron-vite": "^2.0.0",
     "eslint": "^8.54.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
-    "pngjs": "^7.0.0",
     "postcss": "^8.4.32",
     "prettier": "^3.1.0",
     "tailwindcss": "^3.3.6",
@@ -106,13 +75,13 @@
   "keywords": [
     "clipboard",
     "clipboard-manager",
-    "electron",
-    "cross-platform",
-    "windows-11",
     "productivity",
     "utility",
     "react",
-    "typescript"
+    "typescript",
+    "tauri",
+    "rust",
+    "macos"
   ],
   "repository": {
     "type": "git",
@@ -120,161 +89,5 @@
   },
   "bugs": {
     "url": "https://github.com/ahadalichowdhury/LocalClip"
-  },
-  "build": {
-    "appId": "com.localclip.app",
-    "productName": "LocalClip",
-    "copyright": "Copyright © 2024 ${author}",
-    "directories": {
-      "output": "release/${version}"
-    },
-    "files": [
-      "out/**/*",
-      "node_modules/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "assets/",
-        "to": "assets/",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ],
-    "mac": {
-      "category": "public.app-category.productivity",
-      "icon": "assets/app.icns",
-      "hardenedRuntime": false,
-      "gatekeeperAssess": false,
-      "identity": "Apple Development: smahadalichowdhury@gmail.com (52N947BX2B)",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "arm64"
-          ]
-        }
-      ]
-    },
-    "dmg": {
-      "title": "${productName} ${version}",
-      "icon": "assets/app.icns",
-      "iconSize": 80,
-      "contents": [
-        {
-          "x": 410,
-          "y": 150,
-          "type": "link",
-          "path": "/Applications"
-        },
-        {
-          "x": 130,
-          "y": 150,
-          "type": "file"
-        }
-      ],
-      "window": {
-        "width": 540,
-        "height": 380
-      },
-      "format": "UDZO"
-    },
-    "win": {
-      "icon": "assets/icon.ico",
-      "publisherName": "S. M. Ahad Ali Chowdhury",
-      "verifyUpdateCodeSignature": false,
-      "signingHashAlgorithms": [
-        "sha256"
-      ],
-      "certificateFile": "${env.WINDOWS_CERT_FILE}",
-      "certificatePassword": "${env.WINDOWS_CERT_PASSWORD}",
-      "timeStampServer": "http://timestamp.digicert.com",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "linux": {
-      "icon": "assets/app.png",
-      "category": "Utility",
-      "maintainer": "S. M. Ahad Ali Chowdhury <smahadalichowdhury@gmail.com>",
-      "vendor": "LocalClip",
-      "synopsis": "Modern clipboard manager for Linux",
-      "description": "A modern, cross-platform clipboard manager with smart categorization and search capabilities.",
-      "desktop": {
-        "Name": "LocalClip",
-        "Comment": "Modern Clipboard Manager",
-        "Keywords": "clipboard;manager;productivity;utility;",
-        "StartupNotify": "true"
-      },
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "deb",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "rpm",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "snap",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "LocalClip"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "ahadalichowdhury",
-      "repo": "LocalClip"
-    }
   }
 }

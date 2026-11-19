@@ -6,7 +6,10 @@ import {
   waitFor,
 } from '@testing-library/react';
 import React from 'react';
-import App from '../../src/renderer/src/App';
+import App, {
+  defaultSelection,
+  displayOrder,
+} from '../../src/renderer/src/App';
 import { ClipboardEntry } from '../../src/shared/types';
 
 const mockClipboardEntries: ClipboardEntry[] = [
@@ -91,7 +94,7 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('No clipboard history yet')).toBeInTheDocument();
       expect(
-        screen.getByText('Copy something to get started!')
+        screen.getByText(/Copy something with/)
       ).toBeInTheDocument();
     });
   });
@@ -126,7 +129,7 @@ describe('App', () => {
     render(<App />);
 
     // Should render About component
-    expect(screen.getByText('ClipSync')).toBeInTheDocument();
+    expect(screen.getByText('LocalClip')).toBeInTheDocument();
     // Look for the version text more flexibly
     expect(screen.getByText(/Version/)).toBeInTheDocument();
   });
@@ -145,12 +148,175 @@ describe('App', () => {
 
     // Should call smartPaste
     expect(window.electronAPI.clipboard.smartPaste).toHaveBeenCalledWith(
-      'Test clipboard content'
+      expect.objectContaining({ content: 'Test clipboard content' })
     );
 
     // Test escape key
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(window.electronAPI.window.hide).toHaveBeenCalled();
+  });
+
+  it('pastes the newest clip on Enter, not a pinned one', async () => {
+    const pinned = {
+      ...mockClipboardEntries[0],
+      id: 2,
+      content: 'Pinned clip',
+      preview: 'Pinned clip',
+      isPinned: true,
+    };
+    const latest = {
+      ...mockClipboardEntries[0],
+      id: 3,
+      content: 'Latest clip',
+      preview: 'Latest clip',
+    };
+    (window.electronAPI.clipboard.getHistory as jest.Mock).mockResolvedValue([
+      pinned,
+      latest,
+    ]);
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('Latest clip')).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(document, { key: 'Enter' });
+
+    expect(window.electronAPI.clipboard.smartPaste).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Latest clip' })
+    );
+  });
+
+  it('keyboard pastes the row shown, even when a pinned clip is older', async () => {
+    // Stored order: newer unpinned clip first, older pinned clip second.
+    // On screen the pinned clip is on top, so ⌘1 / ↑ must reach it.
+    const latest = {
+      ...mockClipboardEntries[0],
+      id: 10,
+      content: 'Newer clip',
+      preview: 'Newer clip',
+      createdAt: new Date('2024-01-03'),
+    };
+    const pinned = {
+      ...mockClipboardEntries[0],
+      id: 11,
+      content: 'Pinned older clip',
+      preview: 'Pinned older clip',
+      isPinned: true,
+      createdAt: new Date('2024-01-01'),
+    };
+    (window.electronAPI.clipboard.getHistory as jest.Mock).mockResolvedValue([
+      latest,
+      pinned,
+    ]);
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('Newer clip')).toBeInTheDocument();
+    });
+    const paste = window.electronAPI.clipboard.smartPaste as jest.Mock;
+
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(paste).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: 'Newer clip' })
+    );
+
+    fireEvent.keyDown(document, { key: '1', metaKey: true, ctrlKey: true });
+    expect(paste).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: 'Pinned older clip' })
+    );
+
+    fireEvent.keyDown(document, { key: '2', metaKey: true, ctrlKey: true });
+    expect(paste).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: 'Newer clip' })
+    );
+
+    fireEvent.keyDown(document, { key: 'ArrowUp' });
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(paste).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: 'Pinned older clip' })
+    );
+  });
+
+  it('pinning a clip in the popup keeps keys in sync with the rows', async () => {
+    const a = {
+      ...mockClipboardEntries[0],
+      id: 20,
+      content: 'Clip A',
+      preview: 'Clip A',
+      createdAt: new Date('2024-01-03'),
+    };
+    const b = {
+      ...mockClipboardEntries[0],
+      id: 21,
+      content: 'Clip B',
+      preview: 'Clip B',
+      createdAt: new Date('2024-01-02'),
+    };
+    (window.electronAPI.clipboard.getHistory as jest.Mock).mockResolvedValue([a, b]);
+    (window.electronAPI.clipboard.pin as jest.Mock).mockResolvedValue({
+      ...b,
+      isPinned: true,
+    });
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('Clip B')).toBeInTheDocument();
+    });
+
+    // pin B (second row) from its row action
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin' })[1]);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Unpin' })).toBeInTheDocument();
+    });
+    const paste = window.electronAPI.clipboard.smartPaste as jest.Mock;
+
+    // B is now the top row (⌘1); A is the newest unpinned clip (↵)
+    fireEvent.keyDown(document, { key: '1', metaKey: true, ctrlKey: true });
+    expect(paste).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: 'Clip B' })
+    );
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(paste).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: 'Clip A' })
+    );
+  });
+
+  it('displayOrder puts pinned first, newest first in each group', () => {
+    const e = mockClipboardEntries[0];
+    const mk = (id: number, day: number, isPinned = false) => ({
+      ...e,
+      id,
+      isPinned,
+      createdAt: new Date(`2024-01-0${day}`),
+    });
+    const ids = displayOrder([mk(1, 3), mk(2, 1, true), mk(3, 5), mk(4, 2, true)]).map(
+      x => x.id
+    );
+    expect(ids).toEqual([4, 2, 3, 1]);
+  });
+
+  it('Emoji tab types the picked emoji without touching the clipboard', async () => {
+    const insertText = jest.fn().mockResolvedValue(true);
+    (window.electronAPI.clipboard as any).insertText = insertText;
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('Test clipboard content')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: /Emoji/ }));
+    const grinning = await screen.findByRole('option', { name: 'grinning face' });
+    fireEvent.click(grinning);
+
+    expect(insertText).toHaveBeenCalledWith('😀');
+    expect(window.electronAPI.clipboard.smartPaste).not.toHaveBeenCalled();
+    expect(window.electronAPI.clipboard.paste).not.toHaveBeenCalled();
+  });
+
+  it('defaultSelection skips pinned clips', () => {
+    const e = mockClipboardEntries[0];
+    expect(defaultSelection([])).toBe(0);
+    expect(defaultSelection([{ ...e, isPinned: true }])).toBe(0);
+    expect(
+      defaultSelection([{ ...e, isPinned: true }, { ...e, isPinned: true }, e])
+    ).toBe(2);
   });
 
   it('should handle search functionality', async () => {
@@ -214,7 +380,7 @@ describe('App', () => {
     fireEvent.click(clearButton);
 
     const confirmClear = await screen.findByRole('button', {
-      name: /Clear all unpinned/i,
+      name: /Clear unpinned clips/i,
     });
     fireEvent.click(confirmClear);
 

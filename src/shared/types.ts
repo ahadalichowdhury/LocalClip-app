@@ -40,6 +40,12 @@ export interface Settings {
   // Appearance
   theme: 'light' | 'dark' | 'auto';
   accentColor: string;
+  /** Highlighter colour behind the selected clip (see lib/highlight.ts) */
+  highlightColor: string;
+  /** Frosted, see-through popup background */
+  glassEffect: boolean;
+  /** Popup background opacity (%) when glass is on */
+  glassOpacity: number;
   fontSize: 'small' | 'medium' | 'large';
 
   // Behavior
@@ -65,6 +71,9 @@ export const DEFAULT_SETTINGS: Settings = {
   minimizeToTray: true,
   theme: 'auto',
   accentColor: '#0078d4',
+  highlightColor: 'yellow',
+  glassEffect: false,
+  glassOpacity: 70,
   fontSize: 'medium',
   globalHotkey: 'CommandOrControl+Shift+V',
   monitorClipboard: true,

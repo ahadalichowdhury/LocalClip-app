@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
-[![Electron](https://img.shields.io/badge/Electron-36.3.1-blue)](https://electronjs.org/)
+[![Tauri](https://img.shields.io/badge/Tauri-2-blue)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-18.2.0-blue)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3.2-blue)](https://www.typescriptlang.org/)
 
@@ -82,18 +82,22 @@ Visit our [Releases page](https://github.com/ahadalichowdhury/LocalClip/releases
 git clone https://github.com/ahadalichowdhury/LocalClip.git
 cd LocalClip
 
+# Install Rust (once): https://rustup.rs
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
 # Install dependencies
 npm install
 
-# Development mode
+# Development mode (Vite + Rust backend with hot reload)
 npm run dev
 
-# Build for production
+# Build LocalClip.app + .dmg (src-tauri/target/release/bundle/)
 npm run build
-
-# Package for your platform
-npm run package
 ```
+
+> **Permissions:** auto-paste sends Cmd+V to the app you were using, which
+> needs **System Settings → Privacy & Security → Accessibility** for LocalClip.
+> Without it, the item is still copied and you can press Cmd+V yourself.
 
 ## 🎯 Usage
 
@@ -142,16 +146,25 @@ Access settings through:
 
 - **Node.js** ≥ 18.0.0
 - **npm** ≥ 8.0.0
-- **Git**
+- **Rust** (stable, via rustup)
+- **Xcode Command Line Tools** (`xcode-select --install`)
 
 ### Project Structure
 
 ```
 LocalClip/
+├── src-tauri/          # Rust backend (Tauri 2)
+│   └── src/
+│       ├── main.rs      # App setup, tray, hotkey, lifecycle
+│       ├── window.rs    # Non-activating NSPanel (works over fullscreen apps)
+│       ├── monitor.rs   # Clipboard watcher (NSPasteboard changeCount)
+│       ├── classify.rs  # URL / email / number / code detection
+│       ├── storage.rs   # JSON history (same format as the old Electron build)
+│       ├── settings.rs  # Settings
+│       ├── commands.rs  # IPC commands used by the UI
+│       └── macos.rs     # AppKit / CoreGraphics helpers (pasteboard, Cmd+V)
 ├── src/
-│   ├── main/           # Electron main process
-│   ├── renderer/       # React frontend
-│   ├── preload/        # Preload scripts
+│   ├── renderer/       # React frontend (lib/nativeBridge.ts talks to Rust)
 │   └── shared/         # Shared types and utilities
 ├── assets/             # Icons and resources
 ├── docs/               # Documentation
@@ -165,7 +178,7 @@ LocalClip/
 # Start development server
 npm run dev
 
-# Run tests
+# Run tests (Jest + cargo test)
 npm test
 npm run test:watch
 npm run test:coverage
@@ -178,22 +191,18 @@ npm run format
 # Type checking
 npm run typecheck
 
-# Build for production
+# Build LocalClip.app + .dmg
 npm run build
-
-# Package applications
-npm run package:win     # Windows
-npm run package:mac     # macOS
-npm run package:linux   # Linux
+npm run build:universal  # Intel + Apple Silicon (needs both rustup targets)
 ```
 
 ### Tech Stack
 
 - **Frontend**: React 18, TypeScript, Tailwind CSS
-- **Backend**: Electron 36, Node.js
+- **Backend**: Rust, Tauri 2 (macOS)
 - **State Management**: Zustand
 - **Testing**: Jest, React Testing Library
-- **Build**: Electron Vite, Electron Builder
+- **Build**: Vite, Tauri CLI
 - **UI Components**: Lucide React, Framer Motion
 
 ### Architecture
@@ -203,7 +212,7 @@ LocalClip follows a clean architecture pattern:
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Renderer      │    │   Main Process  │    │   System APIs   │
-│   (React UI)    │◄──►│   (Electron)    │◄──►│   (Clipboard)   │
+│   (React UI)    │◄──►│  (Rust/Tauri)   │◄──►│ (NSPasteboard)  │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          ▲                       ▲
          │                       │
