@@ -4,10 +4,10 @@
 
 ![LocalClip Logo](assets/app.png)
 
-**A modern, Windows 11-inspired clipboard manager with local storage and privacy-first design**
+**A fast, Windows 11-style clipboard history for macOS — local-only and private**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
+[![macOS](https://img.shields.io/badge/macOS-11%2B-black)](https://github.com/ahadalichowdhury/LocalClip-app/releases/latest)
 [![Tauri](https://img.shields.io/badge/Tauri-2-blue)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-18.2.0-blue)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3.2-blue)](https://www.typescriptlang.org/)
@@ -18,52 +18,19 @@
 
 ## 🌟 Features
 
-### 📋 **Smart Clipboard Management**
-
-- **Real-time monitoring** of system clipboard with persistent history
-- **Multi-format support**: Text, Images, Files, HTML, RTF
-- **Intelligent categorization** with auto-detection
-- **Duplicate detection** and smart merging
-- **Pin important items** for quick access
-
-### 🔍 **Powerful Search & Filter**
-
-- **Instant search** with fuzzy matching
-- **Content type filtering** (Text, Images, Files, URLs, Code)
-- **Date range filters** (Today, Week, Month, Custom)
-- **Source application filtering**
-- **Advanced search** with regex support
-
-### 🎨 **Modern Windows 11-Inspired UI**
-
-- **Fluent Design** with acrylic blur effects
-- **Dynamic theming** (Light, Dark, Auto)
-- **Responsive grid layout** (2-6 columns)
-- **Smooth animations** and transitions
-- **Accessibility compliant** (WCAG 2.1 AA)
-
-### ⚡ **System Integration**
-
-- **Global hotkeys** for quick access (`Ctrl/Cmd + Shift + V`)
-- **System tray integration** with context menu
-- **Auto-start on system boot** (optional)
-- **Cross-platform support** (Windows, macOS, Linux)
-
-### 🔒 **Privacy & Security**
-
-- **Local storage only** - no cloud sync
-- **Excluded apps** configuration
-- **Incognito mode** for sensitive operations
-- **Auto-cleanup** with configurable retention
-- **Optional data encryption**
-
-### 📊 **Advanced Features**
-
-- **Usage analytics** and statistics
-- **Export/Import** clipboard history
-- **Bulk operations** (delete, categorize)
-- **Keyboard shortcuts** for power users
-- **Plugin system** for extensibility
+- **Clipboard history** — text, links, code, numbers, emails, images and rich
+  text (Notes, Pages, web pages) are saved as you copy
+- **Opens anywhere with ⌘⇧V**, right where you are — even over fullscreen apps
+- **Paste with one key**: ↵ for the selected clip, ⌘1–⌘9 for the first nine
+- **Pin** clips you reuse; add a **note** to any clip
+- **Search** and filter by kind (Links, Code, Images, Numbers…)
+- **Screenshots** (⌘⇧3/4/5) land in the history instantly, ready to paste
+- **Emoji picker** (⌘E) with search, recent emoji and skin tones — types the
+  emoji without touching your clipboard
+- **Save a clip to a file**: PNG/JPG for images; text, RTF, HTML or JSON
+- **Your look**: light/dark, highlight colour, glass effect with opacity
+- **Private**: everything stays on your Mac; pause recording any time
+- **Small and fast**: ~5 MB app built with Rust (Tauri)
 
 ## 🚀 Installation
 
