@@ -127,12 +127,8 @@ function App() {
     filterEntries();
   }, [entries, searchQuery, selectedCategory, autoCategories]);
 
-  // Reset the selection to the newest clip when the visible list changes
   const filteredRef = useRef(filteredEntries);
   filteredRef.current = filteredEntries;
-  useEffect(() => {
-    setSelectedIndex(defaultSelection(filteredEntries));
-  }, [filteredEntries]);
 
   // Each time the popup opens: fresh search, newest clip selected.
   useEffect(() => {
@@ -320,7 +316,11 @@ function App() {
       );
     }
 
-    setFilteredEntries(displayOrder(filtered));
+    // Set the list and its default selection together, so there is never a
+    // render where the new rows show but the old selection index applies.
+    const ordered = displayOrder(filtered);
+    setFilteredEntries(ordered);
+    setSelectedIndex(defaultSelection(ordered));
   };
 
   const handleDeleteEntry = async (id: number) => {
