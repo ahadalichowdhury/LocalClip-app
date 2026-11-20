@@ -6,7 +6,6 @@ use crate::classify;
 use crate::macos;
 use crate::state::AppState;
 use crate::storage::ClipboardEntry;
-use base64::Engine;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
@@ -30,26 +29,51 @@ pub fn spawn(app: AppHandle) {
 
             // Our own writes (paste) and paused monitoring are ignored, but we
             // still advance `last_*` so they don't show up later.
+            // Passwords and other content marked private by the copying app
+            // (password managers, Keychain) are never stored.
+            let types = macos::current_types();
             let ignore = state.ignore_change_count.load(Ordering::Acquire) == count
-                || !state.monitoring.load(Ordering::Acquire);
+                || !state.monitoring.load(Ordering::Acquire)
+                || macos::is_private(&types);
+            let has_image = types.iter().any(|t| t == macos::T_PNG || t == macos::T_TIFF);
 
             let text = macos::read_string(macos::T_TEXT);
+
+            // Files copied in Finder come with their names as text and the
+            // file icon as an image; keep them as one "files" clip instead.
+            if types.iter().any(|t| t == macos::T_FILE_URL) {
+                let files = macos::read_files();
+                if !files.is_empty() {
+                    last_text = text.unwrap_or_default();
+                    if !ignore {
+                        let content: Vec<String> = files.iter().map(|p| p.display().to_string()).collect();
+                        save(&app, &state, "file", content.join("\n"), None, None, None);
+                    }
+                    continue;
+                }
+            }
+
             if let Some(text) = text.filter(|t| !t.is_empty() && *t != last_text) {
                 last_text = text.clone();
-                if !ignore {
+                // "Copy Image" in a browser puts the picture *and* its URL (or
+                // file name) on the clipboard: keep the picture. Real text
+                // that comes with a rendered image (Numbers, Word) stays text.
+                if has_image && classify::is_image_source_text(&text) {
+                    // fall through to the image branch below
+                } else {
+                    if !ignore {
                     let (format, content) = rich_variant(&text);
-                    save(&app, &state, format, content, None, Some(&text));
+                    save(&app, &state, format, content, None, Some(&text), None);
+                    }
+                    continue; // text copy; don't also store a rendered image of it
                 }
-                continue; // text copy; don't also store a rendered image of it
             }
 
             if let Some((hash, png)) = read_image() {
                 if hash != last_image_hash {
                     last_image_hash = hash;
                     if !ignore {
-                        if let Some(content) = store_image(&app, hash, &png) {
-                            save(&app, &state, "image", content, None, None);
-                        }
+                        save_image(&app, &state, &png, None);
                     }
                 }
             }
@@ -81,10 +105,12 @@ pub(crate) fn save(
     content: String,
     source: Option<&str>,
     plain: Option<&str>,
+    file_path: Option<String>,
 ) {
     let (auto_categories, max_items, incognito) = {
         let s = state.settings.lock().unwrap();
-        (s.current.auto_categories, s.current.max_history_items, s.current.incognito_mode)
+        let c = &s.current;
+        (c.auto_categories, c.max_history_items, c.incognito_mode)
     };
     if incognito {
         return;
@@ -105,7 +131,7 @@ pub(crate) fn save(
             .or_else(|| macos::frontmost_app().and_then(|a| a.name))
             .or(Some("Unknown App".into())),
         content,
-        file_path: None,
+        file_path,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
         is_pinned: false,
@@ -114,45 +140,38 @@ pub(crate) fn save(
         usage_count: 0,
         last_used_at: None,
         note: None,
+        ocr_text: None,
     };
-    let saved = state.storage.add(entry, max_items);
-    let _ = app.emit_to("main", "clipboard:changed", saved);
+    // Copying something already in the list moves it to the top.
+    let outcome = state.storage.add(entry, max_items, true);
+    if !outcome.removed.is_empty() {
+        let _ = app.emit_to("main", "clipboard:removed", &outcome.removed);
+    }
+    if let Some(saved) = outcome.added {
+        let _ = app.emit_to("main", "clipboard:changed", &saved);
+        if saved.format == "image" && saved.ocr_text.is_none() {
+            crate::ocr::spawn_for(app.clone(), saved);
+        }
+    }
 }
 
-pub(crate) fn fnv1a(bytes: &[u8]) -> u64 {
-    let mut h: u64 = 0xcbf29ce484222325;
-    for b in bytes {
-        h ^= *b as u64;
-        h = h.wrapping_mul(0x100000001b3);
+/// Store an image clip as a file (see `images`) and add it to history.
+pub(crate) fn save_image(app: &AppHandle, state: &AppState, png: &[u8], source: Option<&str>) {
+    match crate::images::save(state.storage.images_dir(), png) {
+        Ok(path) => save(app, state, "image", String::new(), source, None, Some(path.display().to_string())),
+        Err(e) => log::error!("could not store image: {e}"),
     }
-    h
 }
 
 /// Returns (content hash, PNG bytes) for an image on the pasteboard.
 fn read_image() -> Option<(u64, Vec<u8>)> {
     if let Some(png) = macos::read_data(macos::T_PNG) {
-        return Some((fnv1a(&png), png));
+        return Some((crate::images::fnv1a(&png), png));
     }
     let tiff = macos::read_data(macos::T_TIFF)?;
-    let hash = fnv1a(&tiff);
+    let hash = crate::images::fnv1a(&tiff);
     let img = image::load_from_memory_with_format(&tiff, image::ImageFormat::Tiff).ok()?;
     let mut png = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).ok()?;
     Some((hash, png))
-}
-
-/// Saves full image + 64x64 thumbnail like the Electron build, returns a data URL.
-pub(crate) fn store_image(app: &AppHandle, hash: u64, png: &[u8]) -> Option<String> {
-    let dir = app.path().app_data_dir().ok()?.join("images");
-    std::fs::create_dir_all(&dir).ok()?;
-    std::fs::write(dir.join(format!("{hash:x}.png")), png).ok()?;
-    if let Ok(img) = image::load_from_memory_with_format(png, image::ImageFormat::Png) {
-        let _ = img
-            .thumbnail(64, 64)
-            .save_with_format(dir.join(format!("{hash:x}_thumb.png")), image::ImageFormat::Png);
-    }
-    Some(format!(
-        "data:image/png;base64,{}",
-        base64::engine::general_purpose::STANDARD.encode(png)
-    ))
 }

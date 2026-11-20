@@ -15,6 +15,8 @@ export interface ClipboardEntry {
   usageCount: number;
   lastUsedAt?: Date;
   note?: string;
+  /** Text recognised in an image clip ("" = none found) */
+  ocrText?: string;
 }
 
 export interface GetHistoryOptions {
@@ -52,14 +54,11 @@ export interface Settings {
   globalHotkey: string;
   monitorClipboard: boolean;
   autoCategories: boolean;
-  duplicateDetection: boolean;
 
   // Privacy
   excludedApps: string[];
   incognitoMode: boolean;
   encryptData: boolean;
-  autoCleanup: boolean;
-  cleanupDays: number;
 
   // Additional
   hideFromDock: boolean;
@@ -78,11 +77,8 @@ export const DEFAULT_SETTINGS: Settings = {
   globalHotkey: 'CommandOrControl+Shift+V',
   monitorClipboard: true,
   autoCategories: true,
-  duplicateDetection: true,
   excludedApps: [],
   incognitoMode: false,
   encryptData: false,
-  autoCleanup: true,
-  cleanupDays: 30,
   hideFromDock: false,
 };

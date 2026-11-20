@@ -15,4 +15,6 @@ pub struct AppState {
     pub current_hotkey: Mutex<String>,
     /// A save dialog is open: keep the popup instead of hiding on focus loss.
     pub dialog_open: AtomicBool,
+    /// Newer version found by the update check, if any.
+    pub pending_update: Mutex<Option<String>>,
 }

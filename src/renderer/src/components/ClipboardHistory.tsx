@@ -6,7 +6,7 @@ interface ClipboardHistoryProps {
   entries: ClipboardEntry[];
   onDeleteEntry: (id: number) => void;
   onPinEntry: (id: number) => void;
-  onCopyToClipboard: (entry: ClipboardEntry) => void;
+  onCopyToClipboard: (entry: ClipboardEntry, plain?: boolean) => void;
   onUpdateNote: (id: number, note: string) => void;
   selectedIndex?: number;
 }

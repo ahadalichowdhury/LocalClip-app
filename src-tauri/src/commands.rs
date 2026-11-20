@@ -4,7 +4,6 @@
 use crate::state::AppState;
 use crate::storage::{ClipboardEntry, HistoryOptions};
 use crate::{classify, macos, window};
-use base64::Engine;
 use serde_json::Value;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -67,13 +66,23 @@ pub fn clipboard_clear(state: State<AppState>) -> bool {
     state.storage.clear()
 }
 
-fn write_entry_to_pasteboard(entry: &ClipboardEntry) -> Res<()> {
+/// `plain`: paste only the text, dropping formatting (⇧↵ in the popup).
+fn write_entry_to_pasteboard(entry: &ClipboardEntry, images_dir: &std::path::Path, plain: bool) -> Res<()> {
     let c = &entry.content;
-    if let Some(b64) = c.strip_prefix("data:image/").and_then(|r| r.split_once(',')).map(|(_, d)| d) {
-        let png = base64::engine::general_purpose::STANDARD
-            .decode(b64)
-            .map_err(|e| format!("bad image data: {e}"))?;
-        macos::write_png(&png);
+    if plain && entry.format != "image" {
+        macos::write_text(&crate::export::plain_text(entry), None, None);
+    } else if entry.format == "file" {
+        let paths: Vec<std::path::PathBuf> = c
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.exists())
+            .collect();
+        if paths.is_empty() || !macos::write_files(&paths) {
+            return Err("These files no longer exist".into());
+        }
+    } else if entry.format == "image" {
+        macos::write_png(&crate::images::read(images_dir, entry)?);
     } else if entry.format == "html" {
         macos::write_text(&classify::html_to_text(c), Some(c), None);
     } else if entry.format == "rtf" {
@@ -86,9 +95,9 @@ fn write_entry_to_pasteboard(entry: &ClipboardEntry) -> Res<()> {
 
 /// Copy the entry, hide the popup and send Cmd+V to the app the user was in.
 #[tauri::command]
-pub async fn clipboard_paste(app: AppHandle, entry: ClipboardEntry) -> Res<bool> {
+pub async fn clipboard_paste(app: AppHandle, entry: ClipboardEntry, plain: Option<bool>) -> Res<bool> {
     let state = app.state::<AppState>();
-    write_entry_to_pasteboard(&entry)?;
+    write_entry_to_pasteboard(&entry, state.storage.images_dir(), plain.unwrap_or(false))?;
     state.ignore_change_count.store(macos::change_count(), Ordering::Release);
 
     if !hide_and_return_focus(&app).await {
@@ -140,8 +149,8 @@ pub async fn insert_text(app: AppHandle, text: String) -> Res<bool> {
 }
 
 #[tauri::command]
-pub async fn clipboard_smart_paste(app: AppHandle, entry: ClipboardEntry) -> Res<bool> {
-    clipboard_paste(app, entry).await
+pub async fn clipboard_smart_paste(app: AppHandle, entry: ClipboardEntry, plain: Option<bool>) -> Res<bool> {
+    clipboard_paste(app, entry, plain).await
 }
 
 // ------------------------------------------------------------------ settings
@@ -260,8 +269,8 @@ pub fn app_version(app: AppHandle) -> String {
 pub async fn save_clip(app: AppHandle, entry: ClipboardEntry, kind: String) -> Res<Option<String>> {
     use tauri_plugin_dialog::DialogExt;
 
-    let export = crate::export::build(&entry, &kind)?;
     let state = app.state::<AppState>();
+    let export = crate::export::build(&entry, &kind, state.storage.images_dir())?;
     state.dialog_open.store(true, Ordering::Release);
     macos::activate_self();
 

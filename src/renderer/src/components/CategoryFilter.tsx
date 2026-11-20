@@ -4,6 +4,7 @@ import {
   entryMatchesCategoryChip,
 } from '../../../shared/category-display';
 import { ClipboardEntry } from '../../../shared/types';
+import { useScrollFade } from '../hooks/useScrollFade';
 import { kindOf } from '../lib/kinds';
 
 interface CategoryFilterProps {
@@ -45,6 +46,9 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
     });
   }, [entries]);
 
+  const rowRef = React.useRef<HTMLElement>(null);
+  useScrollFade(rowRef, [categories.length]);
+
   // A single kind isn't worth filtering.
   if (categories.length < 2) return null;
 
@@ -52,7 +56,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
     entries.filter(e => entryMatchesCategoryChip(e.category, c)).length;
 
   return (
-    <nav className="lc-filters" aria-label="Filter by kind">
+    <nav className="lc-filters" aria-label="Filter by kind" ref={rowRef}>
       <button
         type="button"
         className="lc-chip"

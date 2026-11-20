@@ -61,8 +61,12 @@ jobs:
           npx jest --ci
           cargo test --manifest-path src-tauri/Cargo.toml
 
-      - name: Build universal DMG
+      - name: Build universal app, DMG and update bundle
         env:
+          # Signs the auto-update bundle (key pair: tauri signer generate;
+          # public key is in tauri.conf.json → plugins.updater.pubkey).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Optional: add these repository secrets to ship a signed and
           # notarized app. Without them the app is ad-hoc signed.
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -78,22 +82,45 @@ jobs:
           if [ -z "$APPLE_ID" ]; then
             unset APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
           fi
-          npx tauri build --target universal-apple-darwin --bundles dmg
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY secret is missing (needed for auto-update)"; exit 1
+          fi
+          npx tauri build --target universal-apple-darwin --bundles app,dmg \
+            --config '{"bundle":{"createUpdaterArtifacts":true}}'
 
-      - name: Locate DMG
-        id: dmg
+      - name: Collect release files
+        id: files
         run: |
-          DMG=$(ls src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg | head -1)
-          test -f "$DMG"
-          echo "path=$DMG" >> "$GITHUB_OUTPUT"
-          echo "name=$(basename "$DMG")" >> "$GITHUB_OUTPUT"
-          ls -lh "$DMG"
+          BUNDLE=src-tauri/target/universal-apple-darwin/release/bundle
+          VERSION=$(jq -r .version src-tauri/tauri.conf.json)
+          DMG=$(ls "$BUNDLE"/dmg/*.dmg | head -1)
+          TGZ="$BUNDLE/macos/LocalClip.app.tar.gz"
+          test -f "$DMG" && test -f "$TGZ" && test -f "$TGZ.sig"
+
+          mkdir -p dist-release
+          cp "$DMG" dist-release/
+          UPDATE_NAME="LocalClip_${VERSION}_universal.app.tar.gz"
+          cp "$TGZ" "dist-release/$UPDATE_NAME"
+
+          # Manifest the app's updater reads from releases/latest/download/latest.json
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/${UPDATE_NAME}"
+          SIG=$(cat "$TGZ.sig")
+          jq -n --arg v "$VERSION" --arg url "$URL" --arg sig "$SIG" \
+                --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                --arg notes "See https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}" \
+            '{version: $v, notes: $notes, pub_date: $date,
+              platforms: {"darwin-aarch64": {signature: $sig, url: $url},
+                          "darwin-x86_64":  {signature: $sig, url: $url}}}' \
+            > dist-release/latest.json
+          cat dist-release/latest.json
+          ls -lh dist-release
+          echo "dmg_name=$(basename "$DMG")" >> "$GITHUB_OUTPUT"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.dmg.outputs.name }}
-          path: ${{ steps.dmg.outputs.path }}
+          name: ${{ steps.files.outputs.dmg_name }}
+          path: dist-release/
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -104,7 +131,7 @@ jobs:
           cat > notes.md <<'NOTES'
           ## Download
 
-          **LocalClip.dmg** below works on both Apple Silicon and Intel Macs (macOS 11 or later).
+          **LocalClip_…_universal.dmg** below works on both Apple Silicon and Intel Macs (macOS 11 or later).
 
           1. Open the DMG and drag **LocalClip** to **Applications**.
           2. Open LocalClip. If macOS says it can't be checked for malicious software:
@@ -114,11 +141,14 @@ jobs:
           3. Press **⌘⇧V** to open your clipboard history.
           4. For auto-paste, allow LocalClip in
              **System Settings → Privacy & Security → Accessibility**.
+
+          Already have LocalClip 2.1 or later? It updates itself — look for
+          "Restart to update" in the popup, or use **Check for Updates…** in the menu bar.
           NOTES
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "${{ steps.dmg.outputs.path }}" --clobber
+            gh release upload "$GITHUB_REF_NAME" dist-release/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "${{ steps.dmg.outputs.path }}" \
+            gh release create "$GITHUB_REF_NAME" dist-release/* \
               --title "LocalClip $GITHUB_REF_NAME" \
               --notes-file notes.md \
               --generate-notes

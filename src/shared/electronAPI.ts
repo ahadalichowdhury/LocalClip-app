@@ -10,8 +10,9 @@ export interface ElectronAPI {
     pin: (id: number) => Promise<ClipboardEntry | null>;
     updateNote: (id: number, note: string) => Promise<ClipboardEntry | null>;
     clear: () => Promise<boolean>;
-    paste: (entry: ClipboardEntry) => Promise<boolean>;
-    smartPaste: (entry: ClipboardEntry) => Promise<boolean>;
+    paste: (entry: ClipboardEntry, plain?: boolean) => Promise<boolean>;
+    /** `plain`: paste text only, without formatting */
+    smartPaste: (entry: ClipboardEntry, plain?: boolean) => Promise<boolean>;
     /** Type text (e.g. an emoji) into the previous app without using the clipboard */
     insertText?: (text: string) => Promise<boolean>;
     /** Native Save dialog; resolves to the saved path, or null if cancelled */
@@ -36,6 +37,12 @@ export interface ElectronAPI {
     clipboardChanged: (callback: (entry: ClipboardEntry) => void) => () => void;
     settingsChanged: (callback: () => void) => () => void;
     windowShown?: (callback: () => void) => () => void;
+    /** Clips removed by the app (repeat moved to top, history limit, cleanup) */
+    clipboardRemoved?: (callback: (ids: number[]) => void) => () => void;
+    /** A clip changed in place (e.g. text found in an image) */
+    clipboardUpdated?: (callback: (entry: ClipboardEntry) => void) => () => void;
+    /** A newer LocalClip version was found */
+    updateAvailable?: (callback: (version: string) => void) => () => void;
   };
   utils: {
     getVersion: () => Promise<string>;
@@ -43,6 +50,12 @@ export interface ElectronAPI {
     isProduction: () => boolean;
     getWindowLabel?: () => string;
     revealInFinder?: (path: string) => Promise<void>;
+    /** URL the web view can load for a local file (image clips) */
+    fileSrc?: (path: string) => string;
+    /** Version found by the last update check, if any */
+    pendingUpdate?: () => Promise<string | null>;
+    /** Download, install and restart */
+    installUpdate?: () => Promise<void>;
   };
 }
 

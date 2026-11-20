@@ -4,7 +4,7 @@
  * Electron to Rust. Each method maps to a `#[tauri::command]` in
  * `src-tauri/src/commands.rs`.
  */
-import { invoke } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { ElectronAPI } from '../../../shared/electronAPI';
@@ -37,8 +37,8 @@ const api: ElectronAPI = {
     pin: id => invoke('clipboard_pin', { id }),
     updateNote: (id, note) => invoke('clipboard_update_note', { id, note }),
     clear: () => invoke('clipboard_clear'),
-    paste: entry => invoke('clipboard_paste', { entry }),
-    smartPaste: entry => invoke('clipboard_smart_paste', { entry }),
+    paste: (entry, plain) => invoke('clipboard_paste', { entry, plain: !!plain }),
+    smartPaste: (entry, plain) => invoke('clipboard_smart_paste', { entry, plain: !!plain }),
     insertText: text => invoke('insert_text', { text }),
     saveToFile: (entry, kind) => invoke('save_clip', { entry, kind }),
   },
@@ -57,6 +57,9 @@ const api: ElectronAPI = {
     clipboardChanged: cb => on<ClipboardEntry>('clipboard:changed', cb),
     settingsChanged: cb => on<null>('show-settings', () => cb()),
     windowShown: cb => on<null>('window:shown', () => cb()),
+    clipboardRemoved: cb => on<number[]>('clipboard:removed', cb),
+    clipboardUpdated: cb => on<ClipboardEntry>('clipboard:updated', cb),
+    updateAvailable: cb => on<string>('update:available', cb),
   },
   utils: {
     getVersion: () => invoke('app_version'),
@@ -64,6 +67,9 @@ const api: ElectronAPI = {
     isProduction: () => !import.meta.env.DEV,
     getWindowLabel: () => getCurrentWindow().label,
     revealInFinder: path => invoke('reveal_in_finder', { path }),
+    fileSrc: path => convertFileSrc(path),
+    pendingUpdate: () => invoke('pending_update'),
+    installUpdate: () => invoke('install_update'),
   },
 };
 

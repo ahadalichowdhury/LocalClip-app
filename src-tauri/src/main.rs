@@ -4,12 +4,15 @@ compile_error!("The Tauri build of LocalClip currently targets macOS only.");
 mod classify;
 mod commands;
 mod export;
+mod images;
 mod macos;
 mod monitor;
+mod ocr;
 mod screenshots;
 mod settings;
 mod state;
 mod storage;
+mod updater;
 mod window;
 
 use settings::SettingsStore;
@@ -53,6 +56,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
             &MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "about", "About", true, None::<&str>)?,
+            &MenuItem::with_id(app, "update", "Check for Updates…", true, None::<&str>)?,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "quit", "Quit LocalClip", true, None::<&str>)?,
         ],
@@ -67,6 +71,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
             "show" => window::show(app),
             "settings" => window::show_settings(app),
             "about" => window::open_about(app),
+            "update" => updater::check_from_menu(app.clone()),
             "quit" => app.exit(0),
             _ => {}
         })
@@ -78,6 +83,7 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_nspanel::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -106,6 +112,8 @@ fn main() {
             commands::insert_text,
             commands::save_clip,
             commands::reveal_in_finder,
+            updater::pending_update,
+            updater::install_update,
             commands::settings_get,
             commands::settings_get_all,
             commands::settings_set,
@@ -131,6 +139,7 @@ fn main() {
                 target_pid: Mutex::new(None),
                 current_hotkey: Mutex::new(String::new()),
                 dialog_open: AtomicBool::new(false),
+                pending_update: Mutex::new(None),
             });
 
             commands::set_dock_hidden(&handle, cfg.hide_from_dock);
@@ -153,6 +162,8 @@ fn main() {
             window::init_panel(&handle)?;
             setup_tray(&handle)?;
             monitor::spawn(handle.clone());
+            ocr::spawn_backfill(handle.clone());
+            updater::spawn_checks(handle.clone());
             screenshots::ensure_instant();
             screenshots::spawn(handle.clone());
             window::open_about(&handle);

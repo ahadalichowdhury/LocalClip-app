@@ -7,6 +7,7 @@ import {
   MoreHorizontal,
   Pin,
   PinOff,
+  ScanText,
   StickyNote,
   Trash2,
 } from 'lucide-react';
@@ -22,7 +23,8 @@ interface ClipboardEntryCardProps {
   entry: ClipboardEntry;
   onDelete: (id: number) => void;
   onPin: (id: number) => void;
-  onCopy: (entry: ClipboardEntry) => void;
+  /** `plain` = paste without formatting (⇧-click) */
+  onCopy: (entry: ClipboardEntry, plain?: boolean) => void;
   onUpdateNote: (id: number, note: string) => void;
   isSelected?: boolean;
   dataIndex?: number;
@@ -37,7 +39,35 @@ function htmlToText(html: string): string {
   return (div.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
-export type ExportKind = 'png' | 'jpg' | 'txt' | 'html' | 'link' | 'rtf' | 'json';
+export function isImageClip(entry: ClipboardEntry): boolean {
+  return (
+    entry.format === 'image' &&
+    (!!entry.filePath || entry.content.startsWith('data:image/'))
+  );
+}
+
+/** Image clips are files (`images/<hash>.png` + `_thumb.png`) shown via the
+ *  app's file URL; older clips may still carry a data: URL. */
+function imageSrc(entry: ClipboardEntry): { thumb: string; full: string } | null {
+  if (entry.filePath) {
+    const toUrl = window.electronAPI?.utils?.fileSrc;
+    if (!toUrl) return null;
+    const full = toUrl(entry.filePath);
+    return { thumb: toUrl(entry.filePath.replace(/\.png$/, '_thumb.png')), full };
+  }
+  return { thumb: entry.content, full: entry.content };
+}
+
+export type ExportKind =
+  | 'png'
+  | 'jpg'
+  | 'txt'
+  | 'html'
+  | 'link'
+  | 'rtf'
+  | 'json'
+  | 'reveal'
+  | 'ocr';
 
 type ExportOption = {
   label: string;
@@ -64,11 +94,18 @@ export function exportOptions(entry: ClipboardEntry): ExportOption[] {
     icon: <Download size={15} />,
     kind: 'rtf',
   };
-  if (entry.format === 'image' && entry.content.startsWith('data:image/')) {
-    return [
+  if (entry.format === 'file') {
+    // the files already exist on disk: just point at them
+    return [{ label: 'Show in Finder', icon: <FileText size={15} />, kind: 'reveal' }];
+  }
+  if (isImageClip(entry)) {
+    const save: ExportOption[] = [
       { label: 'Save as PNG', icon: <ImageDown size={15} />, kind: 'png' },
       { label: 'Save as JPG', icon: <ImageDown size={15} />, kind: 'jpg' },
     ];
+    return entry.ocrText?.trim()
+      ? [{ label: 'Paste text from image', icon: <ScanText size={15} />, kind: 'ocr' }, ...save]
+      : save;
   }
   if (entry.format === 'html') {
     return [{ label: 'Save as web page', icon: <Globe size={15} />, kind: 'html' }, txt, rtf];
@@ -90,6 +127,22 @@ export function toast(message: string, path?: string) {
 }
 
 async function saveEntry(entry: ClipboardEntry, kind: ExportKind) {
+  if (kind === 'ocr') {
+    // paste the recognised text as a plain text clip
+    const text = entry.ocrText?.trim();
+    if (text) {
+      void window.electronAPI?.clipboard?.smartPaste(
+        { ...entry, format: 'text', content: text, filePath: undefined },
+        true
+      );
+    }
+    return;
+  }
+  if (kind === 'reveal') {
+    const first = entry.content.split('\n').find(Boolean);
+    if (first) void window.electronAPI?.utils?.revealInFinder?.(first);
+    return;
+  }
   const api = window.electronAPI?.clipboard;
   if (!api?.saveToFile) return;
   try {
@@ -115,12 +168,18 @@ export const ClipboardEntryCard: React.FC<ClipboardEntryCardProps> = ({
   const [noteText, setNoteText] = useState(entry.note || '');
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!menuAt) return;
     const close = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setMenuAt(null);
+      const t = e.target as Node;
+      // the ⋯ button toggles the menu itself
+      if (!menuRef.current?.contains(t) && !menuButtonRef.current?.contains(t)) setMenuAt(null);
     };
+    // The menu is positioned on screen, so it would float away from its row
+    // when the list scrolls or the window changes: close it instead.
+    const dismiss = () => setMenuAt(null);
     const esc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopImmediatePropagation();
@@ -129,9 +188,15 @@ export const ClipboardEntryCard: React.FC<ClipboardEntryCardProps> = ({
     };
     document.addEventListener('mousedown', close);
     window.addEventListener('keydown', esc, true);
+    window.addEventListener('scroll', dismiss, true);
+    window.addEventListener('resize', dismiss);
+    window.addEventListener('blur', dismiss);
     return () => {
       document.removeEventListener('mousedown', close);
       window.removeEventListener('keydown', esc, true);
+      window.removeEventListener('scroll', dismiss, true);
+      window.removeEventListener('resize', dismiss);
+      window.removeEventListener('blur', dismiss);
     };
   }, [menuAt]);
 
@@ -153,6 +218,10 @@ export const ClipboardEntryCard: React.FC<ClipboardEntryCardProps> = ({
 
   const openMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
+    if (menuAt) {
+      setMenuAt(null);
+      return;
+    }
     const r = e.currentTarget.getBoundingClientRect();
     const menuH = 90;
     const y = r.bottom + menuH > window.innerHeight ? r.top - menuH - 4 : r.bottom + 4;
@@ -160,10 +229,24 @@ export const ClipboardEntryCard: React.FC<ClipboardEntryCardProps> = ({
   };
 
   const body = () => {
-    if (entry.format === 'image' && entry.content.startsWith('data:image/')) {
+    if (isImageClip(entry)) {
+      const src = imageSrc(entry);
       return (
         <div className="lc-thumb">
-          <img src={entry.content} alt="Copied image" draggable={false} />
+          {src ? (
+            <img
+              src={src.thumb}
+              alt="Copied image"
+              draggable={false}
+              onError={e => {
+                // no thumbnail yet (older clip): fall back to the full image
+                const img = e.currentTarget;
+                if (img.src !== src.full) img.src = src.full;
+              }}
+            />
+          ) : (
+            '[Image]'
+          )}
         </div>
       );
     }
@@ -180,8 +263,8 @@ export const ClipboardEntryCard: React.FC<ClipboardEntryCardProps> = ({
 
   return (
     <div
-      className={`lc-row${isSelected ? ' is-selected' : ''}`}
-      onClick={() => onCopy(entry)}
+      className={`lc-row${isSelected ? ' is-selected' : ''}${menuAt ? ' menu-open' : ''}`}
+      onClick={e => (e.shiftKey ? onCopy(entry, true) : onCopy(entry))}
       data-index={dataIndex}
       role="option"
       aria-selected={isSelected}
@@ -209,6 +292,12 @@ export const ClipboardEntryCard: React.FC<ClipboardEntryCardProps> = ({
               ? `from ${entry.appName}`
               : kindSingular(entry)}
           </span>
+          {entry.ocrText?.trim() && (
+            <span className="lc-ocr" title={entry.ocrText.slice(0, 300)}>
+              <ScanText size={12} aria-hidden />
+              Has text
+            </span>
+          )}
         </div>
         {entry.note && (
           <button type="button" className="lc-note" onClick={openNote} title={entry.note}>
@@ -249,12 +338,13 @@ export const ClipboardEntryCard: React.FC<ClipboardEntryCardProps> = ({
             <StickyNote size={15} />
           </button>
         </ActionTooltip>
-        <ActionTooltip label="Save to file">
+        <ActionTooltip label={entry.format === 'file' ? 'More' : 'Save to file'}>
           <button
+            ref={menuButtonRef}
             type="button"
             className="lc-iconbtn"
             onClick={openMenu}
-            aria-label="Save to file"
+            aria-label={entry.format === 'file' ? 'More' : 'Save to file'}
             aria-haspopup="menu"
             aria-expanded={!!menuAt}
           >

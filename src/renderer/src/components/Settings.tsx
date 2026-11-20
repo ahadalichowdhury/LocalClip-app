@@ -382,22 +382,22 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
                   {hotkeyField()}
                 </div>
                 {isRecording ? (
-                  <button type="button" className="lc-btn" onClick={cancelHotkeyRecord}>
+                  <button type="button" className="lc-btn is-small" onClick={cancelHotkeyRecord}>
                     Cancel
                   </button>
                 ) : pendingHotkey ? (
                   <>
-                    <button type="button" className="lc-btn" onClick={cancelHotkeyRecord}>
+                    <button type="button" className="lc-btn is-small" onClick={cancelHotkeyRecord}>
                       Cancel
                     </button>
-                    <button type="button" className="lc-btn is-primary" onClick={applyHotkey}>
+                    <button type="button" className="lc-btn is-small is-primary" onClick={applyHotkey}>
                       Save
                     </button>
                   </>
                 ) : (
                   <button
                     type="button"
-                    className="lc-btn"
+                    className="lc-btn is-small"
                     onClick={() => {
                       handleHotkeyRecord();
                       setTimeout(

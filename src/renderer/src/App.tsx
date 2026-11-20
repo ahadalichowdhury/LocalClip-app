@@ -1,4 +1,4 @@
-import { ClipboardList, CornerDownLeft, Smile } from 'lucide-react';
+import { ClipboardList, CornerDownLeft, Laugh, Sigma, Smile, SmilePlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import '../../shared/electronAPI';
 import {
@@ -7,8 +7,11 @@ import {
 } from '../../shared/category-display';
 import { ClipboardEntry } from '../../shared/types';
 import { About } from './components/About';
+import { ActionTooltip } from './components/ActionTooltip';
 import { CategoryFilter } from './components/CategoryFilter';
 import { EmojiPanel } from './components/EmojiPanel';
+import { PickerPanel } from './components/PickerPanel';
+import { KAOMOJI_GROUPS, SYMBOL_GROUPS } from './lib/symbols';
 import { ClipboardHistory } from './components/ClipboardHistory';
 import { Header } from './components/Header';
 import { SearchBar } from './components/SearchBar';
@@ -43,13 +46,30 @@ export function defaultSelection(list: ClipboardEntry[]): number {
   return firstRecent === -1 ? 0 : firstRecent;
 }
 
+/** The popup's two tabs; ⌘E switches between them. */
+const VIEWS = [
+  { id: 'clips', label: 'Clipboard', icon: ClipboardList },
+  { id: 'emoji', label: 'Emoji', icon: SmilePlus },
+] as const;
+type View = (typeof VIEWS)[number]['id'];
+
+/** What the Emoji tab shows (a small switch inside the tab, like Win+V). */
+const PICKERS = [
+  { id: 'emoji', label: 'Emoji', icon: Smile, search: 'Search emoji' },
+  { id: 'kaomoji', label: 'Kaomoji', icon: Laugh, search: 'Search kaomoji' },
+  { id: 'symbols', label: 'Symbols', icon: Sigma, search: 'Search symbols' },
+] as const;
+type Picker = (typeof PICKERS)[number]['id'];
+
 function App() {
   const [entries, setEntries] = useState<ClipboardEntry[]>([]);
   const [filteredEntries, setFilteredEntries] = useState<ClipboardEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   /** Clipboard history or the emoji picker (like Win+V's tabs) */
-  const [view, setView] = useState<'clips' | 'emoji'>('clips');
-  const [emojiQuery, setEmojiQuery] = useState('');
+  const [view, setView] = useState<View>('clips');
+  const [picker, setPicker] = useState<Picker>('emoji');
+  /** Search text of the Emoji / Kaomoji / Symbols tab (cleared on switch) */
+  const [pickQuery, setPickQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +79,30 @@ function App() {
   const [autoCategories, setAutoCategories] = useState(true);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
   const [notice, setNotice] = useState<{ message: string; path?: string } | null>(null);
+  const [update, setUpdate] = useState<{ version: string; installing?: boolean } | null>(null);
+
+  // A newer version found by the background update check
+  useEffect(() => {
+    const utils = window.electronAPI?.utils;
+    Promise.resolve(utils?.pendingUpdate?.())
+      .then(v => v && setUpdate({ version: v }))
+      .catch(() => {});
+    const off = window.electronAPI?.on?.updateAvailable?.(version => setUpdate({ version }));
+    return () => off?.();
+  }, []);
+
+  const installUpdate = async () => {
+    if (!update) return;
+    setUpdate({ ...update, installing: true });
+    try {
+      await window.electronAPI.utils.installUpdate?.(); // restarts the app
+    } catch (err) {
+      setUpdate({ version: update.version });
+      setNotice({ message: `Update failed: ${err}` });
+    }
+  };
 
   // Short messages from rows (e.g. "Saved clip.png"), hidden after a few seconds
   useEffect(() => {
@@ -113,12 +156,23 @@ function App() {
         setEntries(prev => [entry, ...prev]);
       });
     }
+    // The app removes clips too: the older copy of a repeat, clips over the
+    // history limit, and ones past the "delete after" age.
+    const offRemoved = window.electronAPI?.on?.clipboardRemoved?.(ids => {
+      setEntries(prev => prev.filter(e => !ids.includes(e.id)));
+    });
+    // e.g. text recognised in an image a moment after it was copied
+    const offUpdated = window.electronAPI?.on?.clipboardUpdated?.(updated => {
+      setEntries(prev => prev.map(e => (e.id === updated.id ? updated : e)));
+    });
 
     return () => {
       clearTimeout(timer);
       if (unsubscribe) {
         unsubscribe();
       }
+      offRemoved?.();
+      offUpdated?.();
     };
   }, []);
 
@@ -133,8 +187,15 @@ function App() {
   // Each time the popup opens: fresh search, newest clip selected.
   useEffect(() => {
     const off = window.electronAPI?.on?.windowShown?.(() => {
+      // short open animation (restart it on every show)
+      const shell = shellRef.current;
+      if (shell) {
+        shell.classList.remove('lc-appear');
+        void shell.offsetWidth;
+        shell.classList.add('lc-appear');
+      }
       setView('clips');
-      setEmojiQuery('');
+      setPickQuery('');
       setSelectedIndex(defaultSelection(filteredRef.current));
       searchRef.current?.focus();
       searchRef.current?.select();
@@ -160,10 +221,10 @@ function App() {
       }
 
       // Emoji tab: EmojiPanel handles arrows / Enter itself
-      if (view === 'emoji') {
+      if (view !== 'clips') {
         if (event.key === 'Escape') {
           event.preventDefault();
-          if (emojiQuery) setEmojiQuery('');
+          if (pickQuery) setPickQuery('');
           else window.electronAPI?.window?.hide?.();
         } else if (
           event.key.length === 1 &&
@@ -214,7 +275,7 @@ function App() {
           return;
         case 'Enter':
           event.preventDefault();
-          if (selected) handleCopyToClipboard(selected);
+          if (selected) handleCopyToClipboard(selected, event.shiftKey);
           return;
         case 'Escape':
           event.preventDefault();
@@ -247,10 +308,11 @@ function App() {
     showClearConfirm,
     searchQuery,
     view,
-    emojiQuery,
+    pickQuery,
   ]);
 
-  const switchView = (next: 'clips' | 'emoji') => {
+  const switchView = (next: View) => {
+    if (next !== view) setPickQuery('');
     setView(next);
     requestAnimationFrame(() => searchRef.current?.focus());
   };
@@ -312,7 +374,8 @@ function App() {
           categoryDisplayLabel(entry.category)
             .toLowerCase()
             .includes(query) ||
-          entry.note?.toLowerCase().includes(query)
+          entry.note?.toLowerCase().includes(query) ||
+          entry.ocrText?.toLowerCase().includes(query)
       );
     }
 
@@ -381,31 +444,26 @@ function App() {
     await performClearHistory();
   };
 
-  const handleCopyToClipboard = async (entry: ClipboardEntry) => {
+  /** Paste into the previous app; `plain` drops formatting (⇧↵ / ⇧-click). */
+  const handleCopyToClipboard = async (entry: ClipboardEntry, plain = false) => {
+    const api = window.electronAPI.clipboard;
     try {
-      // Use smart paste to automatically paste to the target app
-      await window.electronAPI.clipboard.smartPaste(entry);
-      console.log(
-        'Smart pasted to target app:',
-        entry.content.substring(0, 50) + '...'
-      );
+      await (plain ? api.smartPaste(entry, true) : api.smartPaste(entry));
     } catch (err) {
-      console.error('Failed to smart paste:', err);
-      // Fallback to regular paste
+      console.error('Paste failed:', err);
+      if (entry.format === 'file') {
+        // e.g. the files were moved or deleted since they were copied
+        window.dispatchEvent(new CustomEvent('lc-toast', { detail: { message: String(err) } }));
+        return;
+      }
       try {
-        await window.electronAPI.clipboard.paste(entry);
-        console.log(
-          'Fallback paste to clipboard:',
-          entry.content.substring(0, 50) + '...'
-        );
-      } catch (fallbackErr) {
-        console.error('All paste methods failed:', fallbackErr);
-        // Final fallback to web API
+        await (plain ? api.paste(entry, true) : api.paste(entry));
+      } catch {
+        // Last resort: at least put the text on the clipboard
         try {
           await navigator.clipboard.writeText(entry.content);
-          console.log('Final fallback - copied to clipboard');
         } catch (finalErr) {
-          console.error('All methods failed:', finalErr);
+          console.error('All paste methods failed:', finalErr);
         }
       }
     }
@@ -518,40 +576,77 @@ function App() {
   };
 
   const mod = isMac ? '⌘' : 'Ctrl';
+  // Emoji tab: hints share the bar that names the selected item
+  const pickerHints = (
+    <span className="lc-hints">
+      <span>
+        <kbd>
+          <CornerDownLeft size={10} strokeWidth={3} aria-label="Return" />
+        </kbd>
+        Insert
+      </span>
+      <span>
+        <kbd>{mod}</kbd>
+        <kbd>E</kbd>
+        Clipboard
+      </span>
+    </span>
+  );
 
   return (
-    <div className="lc-shell">
+    <div className="lc-shell" ref={shellRef}>
       <div className="lc-top">
-        <div className="lc-tabs" role="tablist" aria-label="LocalClip views">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === 'clips'}
-            onClick={() => switchView('clips')}
-          >
-            <ClipboardList size={15} aria-hidden />
-            Clipboard
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === 'emoji'}
-            onClick={() => switchView('emoji')}
-          >
-            <Smile size={15} aria-hidden />
-            Emoji
-          </button>
-        </div>
         <Header
           onClearHistory={view === 'clips' ? openClearConfirm : undefined}
           onOpenSettings={handleOpenSettings}
+          leading={
+            <div className="lc-tabs" role="tablist" aria-label="LocalClip views">
+              {VIEWS.map(v => (
+                <ActionTooltip key={v.id} label={`${v.label} (${mod}E)`}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-label={v.label}
+                    aria-selected={view === v.id}
+                    onClick={() => switchView(v.id)}
+                  >
+                    <v.icon size={16} aria-hidden />
+                  </button>
+                </ActionTooltip>
+              ))}
+            </div>
+          }
+          extra={
+            view === 'emoji' && (
+              <div className="lc-tabs lc-picker-switch" role="group" aria-label="Emoji, kaomoji or symbols">
+                {PICKERS.map(p => (
+                  <ActionTooltip key={p.id} label={p.label}>
+                    <button
+                      type="button"
+                      aria-label={p.label}
+                      aria-pressed={picker === p.id}
+                      onClick={() => {
+                        if (p.id !== picker) setPickQuery('');
+                        setPicker(p.id);
+                        searchRef.current?.focus();
+                      }}
+                    >
+                      <p.icon size={16} aria-hidden />
+                    </button>
+                  </ActionTooltip>
+                ))}
+              </div>
+            )
+          }
         >
           <SearchBar
             ref={searchRef}
-            value={view === 'clips' ? searchQuery : emojiQuery}
-            onChange={view === 'clips' ? setSearchQuery : setEmojiQuery}
+            value={view === 'clips' ? searchQuery : pickQuery}
+            onChange={view === 'clips' ? setSearchQuery : setPickQuery}
             placeholder={
-              view === 'clips' ? 'Search clipboard history...' : 'Search emoji'
+              view === 'clips'
+                ? 'Search clipboard history...'
+                : PICKERS.find(p => p.id === picker)!.search
             }
           />
         </Header>
@@ -568,29 +663,73 @@ function App() {
         <main className="lc-list">{body()}</main>
       ) : (
         <main className="lc-list is-emoji">
-          <EmojiPanel query={emojiQuery} />
+          {picker === 'emoji' && <EmojiPanel query={pickQuery} hints={pickerHints} />}
+          {picker === 'kaomoji' && (
+            <PickerPanel
+              kind="kaomoji"
+              groups={KAOMOJI_GROUPS}
+              query={pickQuery}
+              columns={2}
+              hints={pickerHints}
+            />
+          )}
+          {picker === 'symbols' && (
+            <PickerPanel
+              kind="symbols"
+              groups={SYMBOL_GROUPS}
+              query={pickQuery}
+              columns={8}
+              hints={pickerHints}
+            />
+          )}
         </main>
       )}
 
-      <footer className="lc-foot" aria-label="Keyboard shortcuts">
-        <span>
-          <kbd>
-            <CornerDownLeft size={10} strokeWidth={3} aria-label="Return" />
-          </kbd>
-          {view === 'clips' ? 'Paste' : 'Insert'}
-        </span>
-        {view === 'clips' ? (
+      {view === 'clips' && (
+        <footer className="lc-foot" aria-label="Keyboard shortcuts">
+          <span>
+            <kbd>
+              <CornerDownLeft size={10} strokeWidth={3} aria-label="Return" />
+            </kbd>
+            Paste
+          </span>
           <span>
             <kbd>{mod}</kbd>
             <kbd>1</kbd>–<kbd style={{ marginLeft: 4 }}>9</kbd>Quick paste
           </span>
-        ) : null}
-        <span>
-          <kbd>{mod}</kbd>
-          <kbd>E</kbd>
-          {view === 'clips' ? 'Emoji' : 'Clipboard'}
-        </span>
-      </footer>
+          <span>
+            <kbd>{mod}</kbd>
+            <kbd>E</kbd>
+            Emoji
+          </span>
+        </footer>
+      )}
+
+      {update && !notice && (
+        <div className="lc-toast lc-update" role="status">
+          <span>
+            {update.installing
+              ? `Installing LocalClip ${update.version}…`
+              : `LocalClip ${update.version} is available`}
+          </span>
+          {!update.installing && (
+            <>
+              <button type="button" onClick={() => void installUpdate()}>
+                Restart to update
+              </button>
+              <button
+                type="button"
+                className="lc-toast-dismiss"
+                aria-label="Later"
+                title="Later"
+                onClick={() => setUpdate(null)}
+              >
+                ×
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {notice && (
         <div className="lc-toast" role="status">

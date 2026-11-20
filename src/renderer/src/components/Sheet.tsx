@@ -7,13 +7,14 @@ interface SheetProps {
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  /** Cover the whole panel (Settings) instead of rising from the bottom */
+  /** Cover the whole panel (Settings) instead of a centred dialog */
   full?: boolean;
   labelId?: string;
 }
 
 /**
- * A sheet that rises over the clip list, inside the popup. Rendered into the
+ * A dialog over the clip list (centred), or a full-panel sheet (Settings),
+ * inside the popup. Rendered into the
  * panel shell so it never escapes the rounded window, and it swallows clicks
  * and keys so nothing behind it gets pasted by accident.
  */
@@ -43,7 +44,7 @@ export const Sheet: React.FC<SheetProps> = ({
 
   return createPortal(
     <div
-      className="lc-scrim"
+      className={`lc-scrim${full ? '' : ' is-center'}`}
       onClick={e => {
         e.stopPropagation();
         if (e.target === e.currentTarget) onClose();

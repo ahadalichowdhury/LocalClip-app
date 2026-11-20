@@ -135,7 +135,7 @@ button {
 /* ---------------------------------------------------------------- top bar */
 
 .lc-top {
-  padding: 10px 10px 8px;
+  padding: 10px 10px 14px; /* breathing room above the first clip */
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -149,6 +149,9 @@ button {
 
 .lc-search {
   flex: 1;
+  /* let the field give up space so the buttons beside it never get pushed
+     out of the window (Large text size, Emoji tab's extra switch) */
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -268,9 +271,9 @@ button {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  padding: 12px 4px 6px;
+  padding: 8px 4px 5px;
   background: var(--paper);
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 600;
   color: var(--muted);
 }
@@ -283,10 +286,10 @@ button {
 .lc-row {
   position: relative;
   display: grid;
-  grid-template-columns: 2.1rem minmax(0, 1fr) auto;
-  column-gap: 10px;
+  grid-template-columns: 1.85rem minmax(0, 1fr) auto;
+  column-gap: 9px;
   align-items: start;
-  padding: 9px 10px 9px 10px;
+  padding: 7px 9px 7px 8px;
   border-radius: 10px;
   border: 1px solid var(--row-border);
   background: var(--row-bg);
@@ -295,7 +298,7 @@ button {
 }
 /* space between the boxed rows */
 [role='listbox'] > div + div {
-  margin-top: 6px;
+  margin-top: 4px;
 }
 .lc-row:hover {
   background: var(--surface);
@@ -327,8 +330,8 @@ button {
 
 /* kind tile */
 .lc-tile {
-  width: 2.1rem;
-  height: 2.1rem;
+  width: 1.85rem;
+  height: 1.85rem;
   display: grid;
   place-items: center;
   border-radius: 8px;
@@ -345,7 +348,7 @@ button {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .lc-body {
@@ -376,7 +379,7 @@ button {
 
 .lc-thumb img {
   display: block;
-  height: 4.6rem;
+  height: 3.8rem;
   max-width: 100%;
   object-fit: cover;
   border-radius: 8px;
@@ -423,12 +426,16 @@ button {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 5px;
-  padding-top: 1px;
+  gap: 4px;
+  padding-top: 2px;
   font-size: 0.78rem;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+/* the ⌘N key shows on the selected row only; other rows just show the time */
+.lc-row:not(.is-selected) .lc-qk {
+  display: none;
 }
 .lc-qk {
   margin: 0;
@@ -477,10 +484,10 @@ button {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 7px 12px;
+  padding: 5px 12px;
   border-top: 1px solid var(--line);
   background: var(--surface-2);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -784,14 +791,22 @@ kbd,
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 3px;
-  min-height: 2.15rem;
-  padding: 0 8px;
+  gap: 4px;
+  min-height: 1.9rem;
+  padding: 0 6px;
   border: 1px dashed transparent;
   border-radius: var(--radius-ctl);
-  background: var(--surface-2);
   color: var(--muted);
   font-size: 0.9rem;
+}
+.lc-hotkey-field kbd {
+  font-size: 0.86rem;
+  min-width: 1.6em;
+}
+.lc-btn.is-small {
+  height: 1.85rem;
+  padding: 0 11px;
+  font-size: 0.86rem;
 }
 .lc-hotkey-field.is-recording {
   border-color: var(--ink-2);
@@ -1025,32 +1040,33 @@ html.lc-glass .lc-search {
   background: rgba(var(--row-rgb), calc(var(--glass-a) + 0.25));
 }
 
-/* ---------------------------------------------------------------- tabs */
+/* ---------------------------------------------------------------- tabs
+   Clipboard / Emoji (and Emoji · Kaomoji · Symbols): small icon groups that
+   sit in the search row, so the list starts higher up. */
 
 .lc-tabs {
+  flex: none;
   display: flex;
-  padding: 2px;
-  border-radius: 9px;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
   background: var(--line-soft);
 }
 .lc-tabs button {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 1.85rem;
+  width: 2rem;
+  height: 1.95rem;
+  display: grid;
+  place-items: center;
   border: 0;
   border-radius: 7px;
   background: transparent;
   color: var(--muted);
-  font-size: 0.9rem;
-  font-weight: 500;
 }
 .lc-tabs button:hover {
   color: var(--ink);
 }
-.lc-tabs button[aria-selected='true'] {
+.lc-tabs button[aria-selected='true'],
+.lc-tabs button[aria-pressed='true'] {
   background: var(--surface);
   color: var(--ink);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
@@ -1235,4 +1251,163 @@ html.lc-glass .lc-tabs {
   color: var(--hl-ink);
   font-size: 0.84rem;
   font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- symbols / kaomoji */
+
+.lc-picker-cats {
+  display: flex;
+  gap: 4px;
+  padding: 0 8px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.lc-picker-cats::-webkit-scrollbar {
+  display: none;
+}
+.lc-picker-cats button {
+  flex: none;
+  height: 1.65rem;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--line-soft);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.lc-picker-cats button:hover {
+  color: var(--ink);
+}
+.lc-picker.is-symbols .lc-picker-grid button {
+  font-family: var(--f-ui);
+  font-size: 1.3rem;
+  color: var(--ink);
+}
+.lc-picker.is-kaomoji .lc-picker-grid button {
+  aspect-ratio: auto;
+  height: 2.6rem;
+  padding: 0 6px;
+  font-family: var(--f-ui);
+  font-size: 0.95rem;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lc-picker-big {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.2rem;
+  color: var(--ink);
+}
+.lc-ocr {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  color: var(--faint);
+}
+
+
+.lc-toast .lc-toast-dismiss {
+  width: 1.8rem;
+  padding: 0;
+  background: transparent;
+  color: var(--paper);
+  font-size: 1.1rem;
+  font-weight: 400;
+}
+
+/* fade the edge of a chip row while more chips are scrolled out of view */
+.lc-filters.fade-right,
+.lc-picker-cats.fade-right {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+}
+.lc-filters.fade-left,
+.lc-picker-cats.fade-left {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
+}
+.lc-filters.fade-left.fade-right,
+.lc-picker-cats.fade-left.fade-right {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+}
+
+/* selected row: the code box takes on the highlight instead of grey */
+.lc-row.is-selected .lc-codebox {
+  background: rgba(var(--row-rgb), 0.5);
+  border-color: rgba(var(--hl-rgb), 0.45);
+}
+
+/* Emoji tab: hints sit on the right of the "selected item" bar */
+.lc-hints {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  flex: none;
+  font-size: 0.74rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.lc-emoji-info {
+  min-height: 2.1rem;
+}
+.lc-emoji-name {
+  min-width: 0;
+}
+
+.lc-picker-big {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* popup open: a quick settle, like Spotlight (off with Reduce Motion) */
+.lc-shell.lc-appear {
+  animation: lc-appear 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes lc-appear {
+  from {
+    opacity: 0.35;
+    transform: scale(0.985) translateY(-3px);
+  }
+}
+
+/* small dialogs (clear history, notes) sit in the middle of the popup */
+.lc-scrim.is-center {
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.lc-scrim.is-center .lc-sheet {
+  width: 100%;
+  max-width: 22rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  animation: lc-pop 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes lc-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* keep a row's actions (and its ⋯ button) visible while its menu is open,
+   so the menu stays attached to something */
+.lc-row.menu-open .lc-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.lc-row.menu-open .lc-side {
+  visibility: hidden;
+}
+.lc-actions .lc-iconbtn[aria-expanded='true'] {
+  background: var(--line-soft);
+  color: var(--ink);
 }

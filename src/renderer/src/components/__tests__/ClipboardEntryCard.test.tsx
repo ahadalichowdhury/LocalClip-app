@@ -69,6 +69,7 @@ describe('ClipboardEntryCard', () => {
     // code that isn't JSON doesn't get a broken .json option
     expect(kinds({ category: 'Code', content: 'const a = 1;' })).toEqual(['txt', 'rtf']);
     expect(kinds({})).toEqual(['txt', 'rtf']);
+    expect(kinds({ format: 'file', content: '/Users/me/a.pdf', category: 'Files' })).toEqual(['reveal']);
   });
 
   it('saves through the native dialog and reports where', async () => {
@@ -87,5 +88,68 @@ describe('ClipboardEntryCard', () => {
     await waitFor(() => expect(toasts).toEqual(['Saved clip.txt']));
     expect(h.onCopy).not.toHaveBeenCalled();
     window.removeEventListener('lc-toast', onToast);
+  });
+
+  it('shows image clips from their file, falling back to the full image', () => {
+    (window.electronAPI.utils as any).fileSrc = (p: string) => `asset://localhost${p}`;
+    const img: ClipboardEntry = {
+      ...entry,
+      format: 'image',
+      content: '',
+      preview: '[Image]',
+      category: 'Images',
+      filePath: '/data/images/abc.png',
+    };
+    render(<ClipboardEntryCard entry={img} {...handlers()} dataIndex={0} />);
+    const el = screen.getByAltText('Copied image') as HTMLImageElement;
+    expect(el.src).toBe('asset://localhost/data/images/abc_thumb.png');
+    fireEvent.error(el);
+    expect(el.src).toBe('asset://localhost/data/images/abc.png');
+    expect(exportOptions(img).map(o => o.kind)).toEqual(['png', 'jpg']);
+  });
+
+  it('pastes the text found in an image as plain text', () => {
+    const smartPaste = window.electronAPI.clipboard.smartPaste as jest.Mock;
+    smartPaste.mockClear();
+    const img: ClipboardEntry = {
+      ...entry,
+      format: 'image',
+      content: '',
+      category: 'Images',
+      filePath: '/data/images/abc.png',
+      ocrText: 'Total: 4821',
+    };
+    expect(exportOptions(img).map(o => o.kind)).toEqual(['ocr', 'png', 'jpg']);
+    render(<ClipboardEntryCard entry={img} {...handlers()} dataIndex={0} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Save to file' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Paste text from image/ }));
+    expect(smartPaste).toHaveBeenCalledWith(
+      expect.objectContaining({ format: 'text', content: 'Total: 4821' }),
+      true
+    );
+  });
+
+  it('menu stays attached to its row, toggles, and closes on scroll', () => {
+    render(<ClipboardEntryCard entry={entry} {...handlers()} dataIndex={0} />);
+    const more = screen.getByRole('button', { name: 'Save to file' });
+    const row = screen.getByRole('option');
+
+    fireEvent.mouseDown(more);
+    fireEvent.click(more);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(row).toHaveClass('menu-open'); // actions stay visible under the menu
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+
+    // clicking ⋯ again closes it (no close-then-reopen)
+    fireEvent.mouseDown(more);
+    fireEvent.click(more);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(row).not.toHaveClass('menu-open');
+
+    // scrolling the list closes it rather than leaving it floating
+    fireEvent.click(more);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    fireEvent.scroll(document.body);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 });

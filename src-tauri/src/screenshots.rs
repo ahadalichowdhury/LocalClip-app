@@ -139,7 +139,7 @@ fn import(app: &AppHandle, state: &AppState, path: &Path, done: &HashSet<u64>) -
         log::warn!("could not read screenshot {}", path.display());
         return None;
     };
-    let hash = monitor::fnv1a(&png);
+    let hash = crate::images::fnv1a(&png);
     if done.contains(&hash) {
         return None; // same screenshot, e.g. renamed/moved
     }
@@ -150,9 +150,7 @@ fn import(app: &AppHandle, state: &AppState, path: &Path, done: &HashSet<u64>) -
     macos::write_png(&png);
     state.ignore_change_count.store(macos::change_count(), Ordering::Release);
 
-    if let Some(content) = monitor::store_image(app, hash, &png) {
-        monitor::save(app, state, "image", content, Some("Screenshot"), None);
-    }
+    monitor::save_image(app, state, &png, Some("Screenshot"));
     Some(hash)
 }
 

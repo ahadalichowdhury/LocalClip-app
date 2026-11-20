@@ -190,10 +190,24 @@ pub fn rtf_to_text(rtf: &str) -> String {
     out.lines().map(str::trim_end).collect::<Vec<_>>().join("\n").trim().to_string()
 }
 
+/// "report.pdf" / "report.pdf, photo.png" / "report.pdf, photo.png and 3 more"
+pub fn file_preview(paths: &str) -> String {
+    let names: Vec<&str> = paths
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|p| p.rsplit('/').find(|s| !s.is_empty()).unwrap_or(p))
+        .collect();
+    match names.len() {
+        0 => "[File]".into(),
+        1 | 2 => names.join(", "),
+        n => format!("{}, {} and {} more", names[0], names[1], n - 2),
+    }
+}
+
 pub fn generate_preview(content: &str, format: &str) -> String {
     match format {
         "image" => "[Image]".into(),
-        "file" => "[File]".into(),
+        "file" => file_preview(content),
         "html" => {
             let t = html_to_text(content);
             if t.is_empty() { "[Rich Text]".into() } else { truncate_chars(&t, 100) }
@@ -387,6 +401,19 @@ pub fn is_code(text: &str) -> bool {
     CODE_PATTERNS.iter().any(|r| r.is_match(text))
 }
 
+/// Text that only names an image — its URL, a file path or a file name —
+/// which browsers and Finder put on the clipboard next to the picture.
+pub fn is_image_source_text(text: &str) -> bool {
+    let t = text.trim();
+    if t.is_empty() || t.contains('\n') {
+        return false;
+    }
+    let lower = t.to_lowercase();
+    const EXT: &[&str] = &[".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".tif", ".tiff", ".bmp", ".svg", ".avif"];
+    let names_image_file = !t.contains(' ') && EXT.iter().any(|e| lower.split(['?', '#']).next().unwrap_or("").ends_with(e));
+    is_url(t) || t.starts_with("data:image/") || names_image_file
+}
+
 pub fn detect_content_type(content: &str, format: &str) -> &'static str {
     match format {
         "image" => "image",
@@ -506,6 +533,25 @@ mod tests {
         // \u with the default \uc1 drops the ANSI fallback char
         assert_eq!(rtf_to_text("{\\rtf1 a\\u8212?b}"), "a—b");
         assert_eq!(rtf_to_text("{\\rtf1 x\\{y\\}\\\\z}"), "x{y}\\z");
+    }
+
+    #[test]
+    fn file_previews() {
+        assert_eq!(generate_preview("/Users/me/report.pdf", "file"), "report.pdf");
+        assert_eq!(generate_preview("/a/x.png\n/a/Folder/", "file"), "x.png, Folder");
+        assert_eq!(generate_preview("/a/1\n/a/2\n/a/3\n/a/4", "file"), "1, 2 and 2 more");
+        assert_eq!(categorize("/a/x", "file", true), "Files");
+    }
+
+    #[test]
+    fn image_source_text() {
+        assert!(is_image_source_text("https://images.example.com/cat.jpg?w=800"));
+        assert!(is_image_source_text("https://www.google.com/imgres?imgurl=x"));
+        assert!(is_image_source_text("Screenshot.png"));
+        assert!(is_image_source_text("/Users/me/Pictures/photo.HEIC"));
+        assert!(!is_image_source_text("Revenue 2024\t1200\nCosts\t800")); // Numbers cells
+        assert!(!is_image_source_text("Meeting notes for Monday"));
+        assert!(!is_image_source_text(""));
     }
 
     #[test]

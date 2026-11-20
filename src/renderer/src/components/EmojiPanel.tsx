@@ -44,13 +44,15 @@ type Section = { id: string; title: string; items: { emoji: Emoji; text: string 
 
 interface EmojiPanelProps {
   query: string;
+  /** Keyboard hints shown at the right of the bottom bar */
+  hints?: React.ReactNode;
 }
 
 /**
  * Emoji tab (like the emoji panel in Windows 11's Win+V). Picking an emoji
  * types it into the app you were in; the clipboard is not touched.
  */
-export const EmojiPanel: React.FC<EmojiPanelProps> = ({ query }) => {
+export const EmojiPanel: React.FC<EmojiPanelProps> = ({ query , hints }) => {
   const [groups, setGroups] = useState<EmojiGroup[] | null>(null);
   const [recent, setRecent] = useState<string[]>(loadRecent);
   const [tone, setTone] = useState<SkinToneId>(loadTone);
@@ -253,6 +255,7 @@ export const EmojiPanel: React.FC<EmojiPanelProps> = ({ query }) => {
             <span className="lc-emoji-name">{shown.emoji.name}</span>
           </>
         )}
+        {hints}
       </div>
     </div>
   );

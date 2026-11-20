@@ -22,12 +22,9 @@ pub struct Settings {
     pub global_hotkey: String,
     pub monitor_clipboard: bool,
     pub auto_categories: bool,
-    pub duplicate_detection: bool,
     pub excluded_apps: Vec<String>,
     pub incognito_mode: bool,
     pub encrypt_data: bool,
-    pub auto_cleanup: bool,
-    pub cleanup_days: u32,
     pub hide_from_dock: bool,
 }
 
@@ -46,12 +43,9 @@ impl Default for Settings {
             global_hotkey: "CommandOrControl+Shift+V".into(),
             monitor_clipboard: true,
             auto_categories: true,
-            duplicate_detection: true,
             excluded_apps: vec![],
             incognito_mode: false,
             encrypt_data: false,
-            auto_cleanup: true,
-            cleanup_days: 30,
             hide_from_dock: false,
         }
     }

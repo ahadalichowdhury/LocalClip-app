@@ -20,6 +20,7 @@ export const SearchBar = forwardRef<HTMLInputElement, SearchBarProps>(
         aria-label="Search clips"
         spellCheck={false}
         autoComplete="off"
+        size={1} // no intrinsic width; the flex layout sizes it
         autoFocus
       />
       {value && (

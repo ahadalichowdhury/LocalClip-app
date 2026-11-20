@@ -8,6 +8,10 @@ interface HeaderProps {
   onOpenSettings: () => void;
   /** The search field, rendered inline so the toolbar is one compact row */
   children?: React.ReactNode;
+  /** Before the search field (the Clipboard / Emoji tabs) */
+  leading?: React.ReactNode;
+  /** After the search field, before Settings (e.g. the emoji kind switch) */
+  extra?: React.ReactNode;
 }
 
 /**
@@ -18,9 +22,13 @@ export const Header: React.FC<HeaderProps> = ({
   onClearHistory,
   onOpenSettings,
   children,
+  leading,
+  extra,
 }) => (
   <header className="lc-searchrow">
+    {leading}
     {children}
+    {extra}
     {onClearHistory && (
       <ActionTooltip label="Clear unpinned clips">
         <button

@@ -1,6 +1,6 @@
 [package]
 name = "localclip"
-version = "2.0.0"
+version = "2.1.0"
 description = "A Windows 11-inspired clipboard manager for macOS"
 authors = ["S. M. Ahad Ali Chowdhury"]
 license = "MIT"
@@ -11,10 +11,11 @@ rust-version = "1.77"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api", "protocol-asset"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
@@ -30,9 +31,10 @@ log = "0.4"
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSString", "NSData", "NSArray"] }
-objc2-app-kit = { version = "0.3", features = ["NSPasteboard", "NSRunningApplication", "NSWorkspace", "NSWindow", "NSPanel", "NSButton", "NSControl", "NSView", "NSResponder"] }
+objc2-foundation = { version = "0.3", features = ["NSString", "NSData", "NSArray", "NSURL", "NSDictionary", "NSError"] }
+objc2-app-kit = { version = "0.3", features = ["NSPasteboard", "NSPasteboardItem", "NSRunningApplication", "NSWorkspace", "NSWindow", "NSPanel", "NSButton", "NSControl", "NSView", "NSResponder"] }
 core-graphics = "0.24"
+objc2-vision = "0.3"
 
 [dev-dependencies]
 tempfile = "3"

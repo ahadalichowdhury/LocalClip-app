@@ -4,7 +4,6 @@
 
 use crate::classify;
 use crate::storage::ClipboardEntry;
-use base64::Engine;
 
 #[derive(Debug, PartialEq)]
 pub struct Export {
@@ -14,17 +13,6 @@ pub struct Export {
     pub label: &'static str,
 }
 
-fn image_bytes(entry: &ClipboardEntry) -> Result<Vec<u8>, String> {
-    let b64 = entry
-        .content
-        .strip_prefix("data:image/")
-        .and_then(|r| r.split_once(','))
-        .map(|(_, d)| d)
-        .ok_or("this clip is not an image")?;
-    base64::engine::general_purpose::STANDARD
-        .decode(b64)
-        .map_err(|e| format!("image data is damaged: {e}"))
-}
 
 /// The clip as plain text, whatever it was copied as.
 pub fn plain_text(entry: &ClipboardEntry) -> String {
@@ -67,8 +55,10 @@ fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// `kind`: png | jpg | txt | html | link | rtf | json
-pub fn build(entry: &ClipboardEntry, kind: &str) -> Result<Export, String> {
+/// `kind`: png | jpg | txt | html | link | rtf | json.
+/// `images_dir` is where image clips' files live (see `images`).
+pub fn build(entry: &ClipboardEntry, kind: &str, images_dir: &std::path::Path) -> Result<Export, String> {
+    let image_bytes = |e: &ClipboardEntry| crate::images::read(images_dir, e);
     let text = |bytes: String, extension, label| Export { bytes: bytes.into_bytes(), extension, label };
     Ok(match kind {
         "png" => {
@@ -149,6 +139,8 @@ pub fn default_name(extension: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::Engine;
+    use std::path::Path;
 
     fn entry(content: &str, format: &str) -> ClipboardEntry {
         serde_json::from_value(serde_json::json!({ "content": content, "format": format })).unwrap()
@@ -168,9 +160,9 @@ mod tests {
     #[test]
     fn images_export_as_real_png_and_jpg() {
         let e = entry(&png_data_url(), "image");
-        let png = build(&e, "png").unwrap();
+        let png = build(&e, "png", Path::new("/nonexistent")).unwrap();
         assert!(png.bytes.starts_with(b"\x89PNG"));
-        let jpg = build(&e, "jpg").unwrap();
+        let jpg = build(&e, "jpg", Path::new("/nonexistent")).unwrap();
         assert!(jpg.bytes.starts_with(&[0xFF, 0xD8]) && jpg.bytes.ends_with(&[0xFF, 0xD9]));
         let back = image::load_from_memory(&jpg.bytes).unwrap();
         assert_eq!((back.width(), back.height()), (3, 2));
@@ -181,15 +173,15 @@ mod tests {
     #[test]
     fn text_exports() {
         let rtf = "{\\rtf1\\ansi{\\fonttbl\\f0 Helvetica;}\\f0 Hello\\\nworld}";
-        assert_eq!(build(&entry(rtf, "rtf"), "txt").unwrap().bytes, b"Hello\nworld");
-        assert_eq!(build(&entry(rtf, "rtf"), "rtf").unwrap().bytes, rtf.as_bytes());
-        assert_eq!(build(&entry("<b>Hi</b> there", "html"), "txt").unwrap().bytes, b"Hi there");
+        assert_eq!(build(&entry(rtf, "rtf"), "txt", Path::new("/nonexistent")).unwrap().bytes, b"Hello\nworld");
+        assert_eq!(build(&entry(rtf, "rtf"), "rtf", Path::new("/nonexistent")).unwrap().bytes, rtf.as_bytes());
+        assert_eq!(build(&entry("<b>Hi</b> there", "html"), "txt", Path::new("/nonexistent")).unwrap().bytes, b"Hi there");
 
-        let link = String::from_utf8(build(&entry("https://a.com/?x=1&y=2", "text"), "link").unwrap().bytes).unwrap();
+        let link = String::from_utf8(build(&entry("https://a.com/?x=1&y=2", "text"), "link", Path::new("/nonexistent")).unwrap().bytes).unwrap();
         assert!(link.contains("href=\"https://a.com/?x=1&amp;y=2\""));
 
-        assert!(build(&entry("not json", "text"), "json").is_err());
-        let json = String::from_utf8(build(&entry("{\"a\":1}", "text"), "json").unwrap().bytes).unwrap();
+        assert!(build(&entry("not json", "text"), "json", Path::new("/nonexistent")).is_err());
+        let json = String::from_utf8(build(&entry("{\"a\":1}", "text"), "json", Path::new("/nonexistent")).unwrap().bytes).unwrap();
         assert_eq!(json, "{\n  \"a\": 1\n}");
     }
 
@@ -202,7 +194,7 @@ mod tests {
 
     #[test]
     fn rejects_wrong_kind() {
-        assert!(build(&entry("hello", "text"), "png").is_err());
-        assert!(build(&entry("hello", "text"), "exe").is_err());
+        assert!(build(&entry("hello", "text"), "png", Path::new("/nonexistent")).is_err());
+        assert!(build(&entry("hello", "text"), "exe", Path::new("/nonexistent")).is_err());
     }
 }

@@ -310,6 +310,113 @@ describe('App', () => {
     expect(window.electronAPI.clipboard.paste).not.toHaveBeenCalled();
   });
 
+  it('drops clips the app removed (repeat moved up, history limit)', async () => {
+    let removed: ((ids: number[]) => void) | undefined;
+    (window.electronAPI.on as any).clipboardRemoved = (cb: (ids: number[]) => void) => {
+      removed = cb;
+      return () => {};
+    };
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('Test clipboard content')).toBeInTheDocument();
+    });
+    act(() => removed!([1]));
+    expect(screen.queryByText('Test clipboard content')).not.toBeInTheDocument();
+    delete (window.electronAPI.on as any).clipboardRemoved;
+  });
+
+  it('Shift+Enter pastes without formatting', async () => {
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('Test clipboard content')).toBeInTheDocument();
+    });
+    fireEvent.keyDown(document, { key: 'Enter', shiftKey: true });
+    expect(window.electronAPI.clipboard.smartPaste).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Test clipboard content' }),
+      true
+    );
+  });
+
+  it('Symbols live inside the Emoji tab: search and insert', async () => {
+    const insertText = jest.fn().mockResolvedValue(true);
+    (window.electronAPI.clipboard as any).insertText = insertText;
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('Test clipboard content')).toBeInTheDocument();
+    });
+
+    // only two top tabs; ⌘E opens Emoji
+    expect(screen.getAllByRole('tab').map(t => t.getAttribute('aria-label'))).toEqual(['Clipboard', 'Emoji']);
+    fireEvent.keyDown(document, { key: 'e', metaKey: true, ctrlKey: true });
+    expect(screen.getByRole('tab', { name: /Emoji/ })).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: /Symbols/ }));
+    fireEvent.change(screen.getByPlaceholderText(/Search symbols/), { target: { value: 'euro' } });
+    fireEvent.click(screen.getByRole('option', { name: '€ euro' }));
+    expect(insertText).toHaveBeenCalledWith('€');
+    expect(window.electronAPI.clipboard.smartPaste).not.toHaveBeenCalled();
+
+    // ⌘E goes back to the clipboard
+    fireEvent.keyDown(document, { key: 'e', metaKey: true, ctrlKey: true });
+    expect(screen.getByRole('tab', { name: /Clipboard/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('finds screenshots by the text in them', async () => {
+    const shot = {
+      ...mockClipboardEntries[0],
+      id: 30,
+      format: 'image' as const,
+      content: '',
+      preview: '[Image]',
+      category: 'Images',
+      filePath: '/x/images/a.png',
+      ocrText: 'Invoice 4821 due Friday',
+    };
+    (window.electronAPI.clipboard.getHistory as jest.Mock).mockResolvedValue([
+      mockClipboardEntries[0],
+      shot,
+    ]);
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('Test clipboard content')).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByPlaceholderText('Search clipboard history...'), {
+      target: { value: 'invoice 4821' },
+    });
+    expect(screen.queryByText('Test clipboard content')).not.toBeInTheDocument();
+    expect(screen.getByText('Has text')).toBeInTheDocument();
+  });
+
+  it('offers a found update and installs it on request', async () => {
+    const installUpdate = jest.fn().mockResolvedValue(undefined);
+    (window.electronAPI.utils as any).pendingUpdate = jest.fn().mockResolvedValue('2.1.0');
+    (window.electronAPI.utils as any).installUpdate = installUpdate;
+    render(<App />);
+    expect(await screen.findByText('LocalClip 2.1.0 is available')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Restart to update' }));
+    expect(installUpdate).toHaveBeenCalled();
+    expect(await screen.findByText('Installing LocalClip 2.1.0…')).toBeInTheDocument();
+    delete (window.electronAPI.utils as any).pendingUpdate;
+    delete (window.electronAPI.utils as any).installUpdate;
+  });
+
+  it('plays the open animation and resets to Clipboard each time it opens', async () => {
+    let shown: (() => void) | undefined;
+    (window.electronAPI.on as any).windowShown = (cb: () => void) => {
+      shown = cb;
+      return () => {};
+    };
+    const { container } = render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText('Test clipboard content')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('tab', { name: 'Emoji' }));
+    act(() => shown!());
+    expect(container.querySelector('.lc-shell')).toHaveClass('lc-appear');
+    expect(screen.getByRole('tab', { name: 'Clipboard' })).toHaveAttribute('aria-selected', 'true');
+    delete (window.electronAPI.on as any).windowShown;
+  });
+
   it('defaultSelection skips pinned clips', () => {
     const e = mockClipboardEntries[0];
     expect(defaultSelection([])).toBe(0);
